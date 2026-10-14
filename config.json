@@ -1,0 +1,204 @@
+{
+  "version": 1,
+  "exportedAt": "2026-06-20T00:00:00.000Z",
+  "taxRate": 0.28,
+  "monthlyCapital": 1200,
+  "targetYield": 0.045,
+  "divGrowth": 0.03,
+  "portfolioGoal": 200000,
+  "fxEurUsd": 1.1553,
+  "whtByCountry": {
+    "🇺🇸": {
+      "name": "US",
+      "domestic": 0.3,
+      "treaty": 0.15,
+      "note": "Tratado PT-US (1994) · crédito IRS de 28%"
+    },
+    "🇬🇧": {
+      "name": "UK",
+      "domestic": 0.0,
+      "treaty": 0.0,
+      "note": "UK não retém na fonte dividendos a não-residentes · declarar em PT"
+    },
+    "🇳🇱": {
+      "name": "NL",
+      "domestic": 0.15,
+      "treaty": 0.15,
+      "note": "Retido na fonte (NL) · crédito fiscal em PT"
+    },
+    "🇵🇹": {
+      "name": "PT",
+      "domestic": 0.28,
+      "treaty": 0.0,
+      "note": "Sem retenção na fonte · tributado a 28% IRS"
+    },
+    "🇫🇷": {
+      "name": "FR",
+      "domestic": 0.3,
+      "treaty": 0.15,
+      "note": "Tratado PT-FR · crédito fiscal em PT"
+    },
+    "🇩🇪": {
+      "name": "DE",
+      "domestic": 0.26375,
+      "treaty": 0.15,
+      "note": "Tratado PT-DE (reduz 26.4% → 15%) · crédito em PT"
+    },
+    "🇩🇰": {
+      "name": "DK",
+      "domestic": 0.27,
+      "treaty": 0.1,
+      "note": "Tratado PT-DK · crédito fiscal em PT"
+    },
+    "🇪🇸": {
+      "name": "ES",
+      "domestic": 0.19,
+      "treaty": 0.15,
+      "note": "Tratado PT-ES · crédito fiscal em PT"
+    },
+    "🇮🇪": {
+      "name": "IE",
+      "domestic": 0.0,
+      "treaty": 0.0,
+      "note": "ETFs domiciliados em Irlanda: 0% WHT na distribuição"
+    },
+    "🇱🇺": {
+      "name": "LU",
+      "domestic": 0.15,
+      "treaty": 0.15,
+      "note": "ETFs domiciliados no Luxemburgo · 15% treaty"
+    },
+    "🌐": {
+      "name": "—",
+      "domestic": 0.0,
+      "treaty": 0.0,
+      "note": "Global ETFs / não identificado · sem WHT registado"
+    }
+  },
+  "posCountry": {
+    "ADC": "🇺🇸",
+    "BTI": "🇬🇧",
+    "JNJ": "🇺🇸",
+    "JPM": "🇺🇸",
+    "KO": "🇺🇸",
+    "MAIN": "🇺🇸",
+    "MCD": "🇺🇸",
+    "MO": "🇺🇸",
+    "MPT": "🇺🇸",
+    "O": "🇺🇸",
+    "PEP": "🇺🇸",
+    "PG": "🇺🇸",
+    "TROW": "🇺🇸",
+    "VICI": "🇺🇸",
+    "WM": "🇺🇸",
+    "XOM": "🇺🇸",
+    "AD.AS": "🇳🇱",
+    "COR.LS": "🇵🇹",
+    "DG.PA": "🇫🇷",
+    "EDPR.LS": "🇵🇹",
+    "ENG.MC": "🇪🇸",
+    "IBE.MC": "🇪🇸",
+    "NN.AS": "🇳🇱",
+    "NOV.DE": "🇩🇰",
+    "NVG.LS": "🇵🇹",
+    "SEM.LS": "🇵🇹",
+    "SHELL.AS": "🇳🇱",
+    "CSH2.PA": "🇫🇷",
+    "FUSD.BE": "🇮🇪",
+    "FWRA.MI": "🇮🇪",
+    "TDIV.MI": "🇮🇪",
+    "VAGF.DE": "🇮🇪",
+    "VUAA.DE": "🇮🇪",
+    "VWCE.DE": "🇮🇪",
+    "XEON.DE": "🇱🇺",
+    "BAC": "🇺🇸",
+    "CCEP": "🇬🇧",
+    "FUSD.DE": "🇮🇪",
+    "GALP.LS": "🇵🇹",
+    "JEPI": "🇺🇸",
+    "LHA.DE": "🇩🇪",
+    "MSFT": "🇺🇸",
+    "NEE": "🇺🇸",
+    "RAM.LS": "🇵🇹",
+    "RENE.LS": "🇵🇹",
+    "STAG": "🇺🇸",
+    "TRET.AS": "🇮🇪",
+    "TSN": "🇺🇸",
+    "VUSA.AS": "🇮🇪",
+    "VWRL.AS": "🇮🇪",
+    "VZ": "🇺🇸",
+    "LGEN": "🇬🇧"
+  },
+  "etfTer": {
+    "CSH2.PA": 0.001,
+    "FUSD.BE": 0.001,
+    "FWRA.MI": 0.0015,
+    "TDIV.MI": 0.0038,
+    "VAGF.DE": 0.001,
+    "VUAA.DE": 0.0007,
+    "VWCE.DE": 0.0022,
+    "XEON.DE": 0.001
+  },
+  "despesasMensais": 517.5,
+  "despesasItems": [
+    {
+      "icon": "🅿️",
+      "label": "Estacionamento",
+      "amount": 30
+    },
+    {
+      "icon": "💪",
+      "label": "Treinador",
+      "amount": 55
+    },
+    {
+      "icon": "⛽",
+      "label": "Gasóleo/Gasolina",
+      "amount": 20
+    },
+    {
+      "icon": "🏍️",
+      "label": "Seguro da Mota",
+      "amount": 12.5
+    },
+      {
+      "icon": "🍔",
+      "label": "Restaurante",
+      "amount": 50
+    },
+    {
+      "icon": "📈",
+      "label": "Investimento Carlitos",
+      "amount": 100
+    },
+    {
+      "icon": "📈",
+      "label": "Investimento XTB Plano",
+      "amount": 100
+    },
+    {
+      "icon": "🏦",
+      "label": "PPR",
+      "amount": 146
+    }
+  ],
+  "benchmarkCache": {
+    "sp500": {
+      "byYear": {
+        "2023": 0.2629,
+        "2024": 0.2502,
+        "2025": 0.1788,
+        "2026 YTD": 0.0998
+      }
+    },
+    "msciWorld": {
+      "byYear": {
+        "2023": 0.2379,
+        "2024": 0.1867,
+        "2025": 0.2109,
+        "2026 YTD": 0.0985
+      }
+    },
+    "asOf": "2026-07-03"
+  }
+}

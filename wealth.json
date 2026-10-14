@@ -1,0 +1,224 @@
+{
+  "version": 1,
+  "exportedAt": "2026-05-31T00:00:00.000Z",
+  "ppr": [
+    {
+      "produto": "AB PPR",
+      "valorInvestido": 9000,
+      "ganhosBrutos": 1165.28,
+      "owner": "Carlos"
+    },
+    {
+      "produto": "Optimize PPR Moderado",
+      "valorInvestido": 30242.29,
+      "ganhosBrutos": 3338.14,
+      "owner": "Claudia"
+    },
+    {
+      "produto": "Generali",
+      "valorInvestido": 12954.95,
+      "ganhosBrutos": 969.95,
+      "owner": "Claudia"
+    }
+  ],
+  "aforro": [
+    {
+      "investimento": 67000,
+      "serie": "E",
+      "juros": 6119.56,
+      "owner": "Carlos",
+      "dataConstituicao": null
+    },
+    {
+      "investimento": 2450,
+      "serie": "B",
+      "juros": 12657.29,
+      "owner": "Claudia",
+      "dataConstituicao": null
+    },
+    {
+      "investimento": 81000,
+      "serie": "E",
+      "juros": 7451.3,
+      "owner": "Claudia",
+      "dataConstituicao": null
+    },
+    {
+      "investimento": 55000,
+      "serie": "F",
+      "juros": 202.4,
+      "owner": "Claudia",
+      "dataConstituicao": "2026-01-05"
+    },
+    {
+      "investimento": 20000,
+      "serie": "CTPV",
+      "juros": 0,
+      "owner": "Claudia",
+      "dataConstituicao": "2022-10-28"
+    }
+  ],
+  "depositos": [
+    {
+      "investidor": "Claudia",
+      "valor": 50000,
+      "rate": 0.016,
+      "plataforma": "Millennium",
+      "netProfit": null,
+      "endDate": null,
+      "status": "A decorrer",
+      "dataInicio": "2026-03-15"
+    },
+    {
+      "investidor": "Claudia",
+      "valor": 49171.5,
+      "rate": 0.03,
+      "plataforma": "Klarna",
+      "netProfit": null,
+      "endDate": "2027-09-18",
+      "status": "A decorrer",
+      "dataInicio": "2026-09-18"
+    },
+    {
+      "investidor": "Carlitos",
+      "valor": 4561.0,
+      "rate": 0.03,
+      "plataforma": "Klarna",
+      "netProfit": null,
+      "endDate": "2027-09-18",
+      "status": "A decorrer",
+      "dataInicio": "2026-09-18"
+    },
+    {
+      "investidor": "Casal",
+      "valor": 4132.82,
+      "rate": 0.03,
+      "plataforma": "Klarna",
+      "netProfit": null,
+      "endDate": "2027-09-18",
+      "status": "A decorrer",
+      "dataInicio": "2026-09-18"
+    },
+    {
+      "investidor": "Mãe",
+      "valor": 42437.23,
+      "rate": 0.03,
+      "plataforma": "Klarna",
+      "netProfit": null,
+      "endDate": "2027-09-18",
+      "status": "A decorrer",
+      "dataInicio": "2026-09-18"
+    },
+    {
+      "investidor": "Claudia",
+      "valor": 50000,
+      "rate": 0.025,
+      "plataforma": "ActivoBank",
+      "netProfit": null,
+      "endDate": "2027-01-12",
+      "status": "A decorrer",
+      "dataInicio": "2026-10-03"
+    }
+  ],
+  "claudiaInvestimentos": {
+    "investimentos": [
+      {
+        "ticker": "VWCE.DE",
+        "valorInvestido": 20000,
+        "precoCompra": 159,
+        "dataCompra": "2026-05-13"
+      },
+      {
+        "ticker": "VWCE.DE",
+        "valorInvestido": 20003.3,
+        "precoCompra": 165.3,
+        "dataCompra": "2026-09-10"
+      }
+    ]
+  },
+  "owners": {
+    "Claudia": {
+      "color": "#60a5fa",
+      "bg": "#1a2a3a"
+    },
+    "Carlos": {
+      "color": "#4ade80",
+      "bg": "#1a2a1a"
+    },
+    "Carlitos": {
+      "color": "#fbbf24",
+      "bg": "#2a2010"
+    },
+    "Casal": {
+      "color": "#e879f9",
+      "bg": "#2a102a"
+    },
+    "Mãe": {
+      "color": "#f43f5e",
+      "bg": "#2a1018"
+    }
+  },
+  "statusColors": {
+    "A decorrer": {
+      "bg": "#042a14",
+      "color": "#4ade80"
+    },
+    "default": {
+      "bg": "#2a1a00",
+      "color": "#fbbf24"
+    }
+  },
+  "netWorthColors": {
+    "portfolio": "var(--green)",
+    "ppr": "var(--gold)",
+    "aforro": "var(--blue)",
+    "depositos": "#a78bfa",
+    "claudiaInvestimentos": "#f472b6"
+  },
+  "pprValoresAtuais": {
+    "PPR+Seguro": 8405.89,
+    "Optimize Moderado": 6738.34,
+    "Alves Ribeiro": 1750
+  },
+  "juros": [
+    {
+      "2023": 28.44,
+      "2024": 251.07,
+      "2025": 587.83,
+      "2026": null,
+      "plataforma": "Trade Republic DE",
+      "pais": "🇩🇪",
+      "country": "Germany",
+      "wht": 0,
+      "valor": 5000,
+      "rate": 0.02,
+      "investidor": "Carlos"
+    },
+    {
+      "2023": 0.15,
+      "2024": 69.74,
+      "2025": 133.37,
+      "2026": null,
+      "plataforma": "Trading 212",
+      "pais": "🇨🇾",
+      "country": "Cyprus",
+      "wht": 0,
+      "valor": 14000,
+      "rate": 0.022,
+      "investidor": "Carlos"
+    },
+    {
+      "2023": null,
+      "2024": null,
+      "2025": null,
+      "2026": 430,
+      "plataforma": "Trade Republic PT",
+      "pais": "🇵🇹",
+      "country": "🇵🇹",
+      "wht": 0,
+      "valor": 15000,
+      "rate": 0.0225,
+      "investidor": "Carlos"
+    }
+  ]
+}
