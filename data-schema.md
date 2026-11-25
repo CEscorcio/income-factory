@@ -57,7 +57,7 @@ One list with every position. Closed positions carry `"status": "sold"`; anythin
 | `divMonths` | integer[] (1–12) | – | Payment months, used by the dividend calendar. |
 | `av` | number ≥ 0 | – | Legacy average cost. Ignored when transactions exist. |
 | `cvAsOf` | date | – | Date of the price in `cv`. |
-| `cvSource` | string | – | Where `cv` came from when it was updated online (e.g. `Twelve Data`). |
+| `cvSource` | string | – | Where `cv` came from: a provider name (`Twelve Data`, `Alpha Vantage`, …), `csv` (broker CSV) or `manual` (typed in the app). A price is shown as **live** only when it came from a provider and `cvAsOf` is at most 4 days old; otherwise the app marks it with an amber ●. |
 
 ### Transaction
 | Field | Type | Req. | Notes |
@@ -130,6 +130,7 @@ Keys written by the price and exchange-rate updates:
 |---|---|
 | `fxEurUsd`, `fxEurUsdAsOf` | EUR/USD rate and its date. The **BCE** button fills them with the European Central Bank reference rate and also adds that day to `fxHistory.rates`. |
 | `priceProvider` | Last provider used in "Cotações online": `twelvedata`, `alphavantage`, `eodhd` or `finnhub`. |
+| `priceFallback` | Provider tried for the tickers the main one can't price (same values, or `""` for none). Default `alphavantage`. |
 | `priceSymbols` | `{ "<ticker>": "<symbol>" }` overrides for tickers the provider knows by another symbol, e.g. `{ "LGEN": "LGEN.L" }`. Format `TICKER` (US) or `TICKER.EXCHANGE` with `L`, `AS`, `LS`, `MI`, `DE`, `F`, `BE`, `PA`, `MC`, `CO`. |
 | `quotesImportedAt`, `quotesSource` | When prices were last updated, and from where. |
 
