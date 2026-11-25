@@ -56,6 +56,8 @@ One list with every position. Closed positions carry `"status": "sold"`; anythin
 | `div` | number ≥ 0 | – | Total dividends received. Equal to the sum of `divByYear`. |
 | `divMonths` | integer[] (1–12) | – | Payment months, used by the dividend calendar. |
 | `av` | number ≥ 0 | – | Legacy average cost. Ignored when transactions exist. |
+| `cvAsOf` | date | – | Date of the price in `cv`. |
+| `cvSource` | string | – | Where `cv` came from when it was updated online (e.g. `Twelve Data`). |
 
 ### Transaction
 | Field | Type | Req. | Notes |
@@ -121,6 +123,17 @@ Rules:
 ## 3. `config`
 
 The scoring thresholds and preferences edited in Config (e.g. `fxEurUsd`, `whtByCountry`, `posCountry`, `etfTer`). Missing keys take the app defaults, so a partial object is fine. Each key must have the same type as its default.
+
+Keys written by the price and exchange-rate updates:
+
+| Key | Notes |
+|---|---|
+| `fxEurUsd`, `fxEurUsdAsOf` | EUR/USD rate and its date. The **BCE** button fills them with the European Central Bank reference rate and also adds that day to `fxHistory.rates`. |
+| `priceProvider` | Last provider used in "Cotações online": `twelvedata`, `alphavantage`, `eodhd` or `finnhub`. |
+| `priceSymbols` | `{ "<ticker>": "<symbol>" }` overrides for tickers the provider knows by another symbol, e.g. `{ "LGEN": "LGEN.L" }`. Format `TICKER` (US) or `TICKER.EXCHANGE` with `L`, `AS`, `LS`, `MI`, `DE`, `F`, `BE`, `PA`, `MC`, `CO`. |
+| `quotesImportedAt`, `quotesSource` | When prices were last updated, and from where. |
+
+The provider's **API key is never stored here** or anywhere in this file. It stays only in the browser that uses it.
 
 ---
 
