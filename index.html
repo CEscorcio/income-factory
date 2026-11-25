@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-25.5';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-25.6';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1573,7 +1573,8 @@ function splitPortfolio(positions){
     sold:positions.filter(p=>p.status==='sold').map(({status,...p})=>p),
   };
 }
-function buildDataFile({pos,sold,qual,cfg,wealth,teses,valuations}){
+function buildDataFile({pos,sold,qual,cfg,wealth,teses,valuations,priceKeys}){
+  const keys=Object.fromEntries(Object.entries(priceKeys||{}).filter(([,v])=>v));
   return{
     app:DATA_FILE_APP,schemaVersion:DATA_SCHEMA_VERSION,exportedAt:new Date().toISOString(),
     portfolio:{positions:joinPortfolio(pos,sold)},
@@ -1582,7 +1583,22 @@ function buildDataFile({pos,sold,qual,cfg,wealth,teses,valuations}){
     wealth:wealth||null,
     theses:teses||null,
     history:{valuations:valuations||[]},
+    // Only when "Incluir as chaves no ficheiro" is ticked in Config → Cotações online.
+    ...(Object.keys(keys).length?{secrets:{priceKeys:keys}}:{}),
   };
+}
+function readPriceKeysSection(secrets){
+  if(secrets==null)return undefined;
+  const keys=requireJsonRecord(secrets,'secrets').priceKeys;
+  if(keys==null)return undefined;
+  requireJsonRecord(keys,'secrets.priceKeys');
+  const out={};
+  Object.entries(keys).forEach(([id,key])=>{
+    if(!PRICE_PROVIDERS[id])return;
+    if(typeof key!=='string')throw new Error(`secrets.priceKeys.${id} deve ser texto.`);
+    if(key.trim())out[id]=key.trim();
+  });
+  return out;
 }
 function readDataFileV2(file){
   const portfolio=requireJsonRecord(file.portfolio||{positions:[]},'portfolio');
@@ -1594,6 +1610,7 @@ function readDataFileV2(file){
     wealth:file.wealth==null?null:validateImportedWealth(file.wealth),
     theses:file.theses==null?null:validateImportedTheses(file.theses),
     valuations:validateValuationHistory(file.history?.valuations||[]),
+    priceKeys:readPriceKeysSection(file.secrets),
   };
 }
 // Old "Backup completo" (type income-factory-full-backup, version 1).
@@ -3978,9 +3995,10 @@ function App(){
     const done=message=>{setToast(message);setTimeout(()=>setToast(''),5000);};
     try{
       const filename='income-factory_'+new Date().toISOString().slice(0,10)+'.json';
-      saveJsonFile(buildDataFile({pos,sold,qual,cfg,wealth,teses,valuations:readValuations()}),filename).then(result=>{
+      const priceKeys=cfg?.exportPriceKeys?Object.fromEntries(Object.keys(PRICE_PROVIDERS).map(id=>[id,readPriceKey(id)])):null;
+      saveJsonFile(buildDataFile({pos,sold,qual,cfg,wealth,teses,valuations:readValuations(),priceKeys}),filename).then(result=>{
         if(result==='cancelled')done('Exportação cancelada.');
-        else done(filename+' '+(result==='shared'?'partilhado':'exportado')+'. Guarda este ficheiro fora do browser.');
+        else done(filename+' '+(result==='shared'?'partilhado':'exportado')+'. Guarda este ficheiro fora do browser'+(priceKeys&&Object.values(priceKeys).some(Boolean)?' e não o partilhes: inclui as tuas chaves API.':'.'));
       });
     }catch(error){
       console.error('data export failed',error);
@@ -4014,6 +4032,8 @@ function App(){
         if(d.valuations!==undefined)entries.push(['if_vh',JSON.stringify(d.valuations)]);
         if(!entries.length)throw new Error('Nenhum dado encontrado.');
         writeImportedBatch(entries,full?['if_fi']:[]);
+        const restoredKeys=d.priceKeys?Object.entries(d.priceKeys):[];
+        restoredKeys.forEach(([id,key])=>writePriceKey(id,key));
         if(positions!==undefined)setPos(positions);
         if(d.sold!==undefined)setSold(d.sold);
         if(quality)setQual(quality);
@@ -4022,7 +4042,7 @@ function App(){
         if(d.theses!==undefined)setTeses(d.theses);
         setNoData(false);
         const nActive=(positions||pos||[]).length,nSold=(d.sold||sold||[]).length;
-        setToast((full?'Dados importados':'Ficheiros antigos importados')+` — ${nActive} activas · ${nSold} fechadas.`+(full?'':' Exporta agora para criar o teu income-factory.json.'));
+        setToast((full?'Dados importados':'Ficheiros antigos importados')+` — ${nActive} activas · ${nSold} fechadas.`+(restoredKeys.length?` ${restoredKeys.length} chave${restoredKeys.length===1?'':'s'} API restaurada${restoredKeys.length===1?'':'s'}.`:'')+(full?'':' Exporta agora para criar o teu income-factory.json.'));
       }catch(error){
         console.error('data import failed',error);
         setToast('Dados não importados: '+error.message);
@@ -5779,7 +5799,11 @@ function PricePanel({cfg,setCfg,pos,setPos}){
   return h('div',{className:'input-row'},
     MicroLabel('Cotações online — API',{size:9,mb:8}),
     h('div',{style:{fontSize:10,color:'var(--muted)',marginBottom:8,lineHeight:1.5}},
-      'Pede as cotações das posições activas, converte para a moeda de cada posição com as taxas do BCE e mostra tudo antes de aplicar. As chaves ficam só neste browser (não vão para o ficheiro de dados).'),
+      'Pede as cotações das posições activas, converte para a moeda de cada posição com as taxas do BCE e mostra tudo antes de aplicar. As chaves ficam guardadas neste browser.'),
+    h('label',{style:{display:'flex',gap:6,alignItems:'flex-start',fontSize:10,color:'var(--muted)',marginBottom:8,lineHeight:1.5,cursor:'pointer'}},
+      h('input',{type:'checkbox',checked:!!cfg?.exportPriceKeys,onChange:e=>setCfg({...cfg,exportPriceKeys:e.target.checked}),style:{marginTop:2}}),
+      h('span',null,'Incluir as chaves no income-factory.json ao exportar, para as levar para outro dispositivo. ',
+        h('span',{style:{color:cfg?.exportPriceKeys?'var(--gold)':'var(--muted)'}},'Quem tiver o ficheiro fica com as chaves: nunca o ponhas no GitHub nem o partilhes.'))),
     providerRow('Fornecedor principal',provider,changeProvider,opts()),
     providerRow('Se falhar, tentar',fb,changeFallback,[h('option',{key:'',value:''},'Nenhum'),...opts(provider)]),
     h('div',{className:'flex gap-1.5',style:{marginTop:4}},

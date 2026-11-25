@@ -12,7 +12,8 @@ All app data lives in **one file, `income-factory.json`** (Config → Importar /
   "config":    { ... },                              // thresholds and preferences
   "wealth":    { ... } | null,                       // PPR, Certificados de Aforro, deposits, interest
   "theses":    { "<TICKER>": Thesis, ... } | null,   // one written thesis per ticker
-  "history":   { "valuations": [ Valuation, ... ] }  // daily portfolio value snapshots
+  "history":   { "valuations": [ Valuation, ... ] }, // daily portfolio value snapshots
+  "secrets":   { "priceKeys": { "twelvedata": "…", "alphavantage": "…" } }  // optional
 }
 ```
 
@@ -134,7 +135,7 @@ Keys written by the price and exchange-rate updates:
 | `priceSymbols` | `{ "<ticker>": "<symbol>" }` overrides for tickers the provider knows by another symbol, e.g. `{ "LGEN": "LGEN.L" }`. Format `TICKER` (US) or `TICKER.EXCHANGE` with `L`, `AS`, `LS`, `MI`, `DE`, `F`, `BE`, `PA`, `MC`, `CO`. |
 | `quotesImportedAt`, `quotesSource` | When prices were last updated, and from where. |
 
-The provider's **API key is never stored here** or anywhere in this file. It stays only in the browser that uses it.
+API keys are **not** part of `config`. They live in the browser and go into the file only in the optional `secrets` section below.
 
 ---
 
@@ -260,7 +261,19 @@ Written by the app once a day; there is no need to edit it.
 
 ---
 
-## 7. Common import errors
+## 7. `secrets` (optional)
+
+Written only when **Incluir as chaves no income-factory.json** is ticked in Config → Cotações online. On import the keys are saved in that browser. A file without `secrets` leaves the browser's keys as they are.
+
+```json
+{ "priceKeys": { "twelvedata": "…", "alphavantage": "…" } }
+```
+
+Valid providers: `twelvedata`, `alphavantage`, `eodhd`, `finnhub`. Anyone with a file that has this section can use your keys: keep it private and never commit it to the repository (the site is public).
+
+---
+
+## 8. Common import errors
 
 | Message (summary) | Cause |
 |---|---|
