@@ -1,5 +1,5 @@
-// Mude a versão sempre que publicar uma alteração, para forçar a atualização do cache.
-const CACHE = 'income-factory-v1';
+// Mude a versão (e window.APP_RELEASE no index.html) sempre que publicar uma alteração.
+const CACHE = 'income-factory-2026-11-25';
 const ASSETS = [
   './',
   'index.html',

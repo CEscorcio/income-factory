@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<script>/* Atualizar a cada release, junto com CACHE em sw.js */window.APP_RELEASE='2026-11-25';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -4263,7 +4264,8 @@ function App(){
           h('button',{
             onClick:()=>{_autoSaveSuspended.current=false;_loaded.current=true;setPos([]);setQual([]);setSold([]);setWealth(null);setTeses(null);setCfg(DCFG);setNoData(false);},
             style:{background:'transparent',border:'none',color:'var(--muted)',fontSize:12,cursor:'pointer',textDecoration:'underline'}
-          },'Continuar sem dados (portfolio vazio)')
+          },'Continuar sem dados (portfolio vazio)'),
+          h('div',{style:{fontSize:10,color:'var(--muted)',marginTop:12,fontFamily:'IBM Plex Mono,monospace'}},'Última release: '+(window.APP_RELEASE||'').split('-').reverse().join('/'))
         )
       ),
       toast&&h('div',{className:'toast'},toast)
