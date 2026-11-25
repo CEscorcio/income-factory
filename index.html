@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release, junto com CACHE em sw.js */window.APP_RELEASE='2026-11-25';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-25.2';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1545,6 +1545,166 @@ function validateValuationHistory(value){
     }
   });
   return value;
+}
+
+// ── Data file: income-factory.json ──────────────────────────────────────────
+// All app data travels in one versioned file. To add a new kind of data:
+//   1. add a key to emptyDataset() and to buildDataFile(),
+//   2. read it in readDataFileV2() (and in any older reader if it has a default),
+//   3. store it in the app's applyDataset().
+// If the shape of an existing section changes, bump DATA_SCHEMA_VERSION and add
+// a step to DATA_MIGRATIONS that converts the previous version, so old files keep importing.
+const DATA_FILE_APP='income-factory';
+const DATA_SCHEMA_VERSION=2;
+const DATA_MIGRATIONS={
+  // 2: { ... } → 3: { ... }   e.g. 2:file=>({...file,schemaVersion:3,newSection:[]})
+};
+function emptyDataset(){
+  return{positions:[],sold:[],quality:[],config:{...DCFG},wealth:null,theses:null,valuations:[]};
+}
+// Active and closed positions are kept apart in the app and joined in the file;
+// closed ones carry status:'sold' in the file only. Every other field is kept as is.
+function joinPortfolio(pos,sold){
+  return[...(pos||[]).map(p=>({...p})),...(sold||[]).map(p=>({...p,status:'sold'}))];
+}
+function splitPortfolio(positions){
+  return{
+    positions:positions.filter(p=>p.status!=='sold'),
+    sold:positions.filter(p=>p.status==='sold').map(({status,...p})=>p),
+  };
+}
+function buildDataFile({pos,sold,qual,cfg,wealth,teses,valuations}){
+  return{
+    app:DATA_FILE_APP,schemaVersion:DATA_SCHEMA_VERSION,exportedAt:new Date().toISOString(),
+    portfolio:{positions:joinPortfolio(pos,sold)},
+    quality:(qual||[]).map(cleanQuality),
+    config:cfg||DCFG,
+    wealth:wealth||null,
+    theses:teses||null,
+    history:{valuations:valuations||[]},
+  };
+}
+function readDataFileV2(file){
+  const portfolio=requireJsonRecord(file.portfolio||{positions:[]},'portfolio');
+  const{positions,sold}=splitPortfolio(validateImportedPositions(portfolio.positions||[],'portfolio.positions'));
+  return{
+    positions,sold,
+    quality:validateImportedQuality(file.quality||[]),
+    config:file.config?validateImportedConfig(file.config):{...DCFG},
+    wealth:file.wealth==null?null:validateImportedWealth(file.wealth),
+    theses:file.theses==null?null:validateImportedTheses(file.theses),
+    valuations:validateValuationHistory(file.history?.valuations||[]),
+  };
+}
+// Old "Backup completo" (type income-factory-full-backup, version 1).
+function readFullBackupV1(backup){
+  if(backup.version!==1)throw new Error('Versão de backup não suportada.');
+  return{
+    positions:validateImportedPositions(backup.positions,'positions'),
+    sold:validateImportedPositions(backup.sold,'sold'),
+    quality:validateImportedQuality(backup.quality),
+    config:validateImportedConfig(backup.config),
+    wealth:backup.wealth===null?null:validateImportedWealth(backup.wealth),
+    theses:backup.teses===null?null:validateImportedTheses(backup.teses),
+    valuations:validateValuationHistory(backup.valuationHistory),
+  };
+}
+// Old portfolio.json: positions[] (closed ones with status:'sold' or n:0) and/or sold[].
+function readLegacyPortfolio(data){
+  if(data.positions!==undefined)validateImportedPositions(data.positions,'positions');
+  if(data.sold!==undefined)validateImportedPositions(data.sold,'sold');
+  if(!data.positions)return{positions:undefined,sold:data.sold};
+  const allPos=data.positions.map(({dv,...r})=>r);
+  const hasNewFormat=allPos.some(p=>p.status==='sold'||p.transactions);
+  if(!hasNewFormat)return{positions:allPos,sold:data.sold||[]};
+  const active=allPos.filter(p=>p.status!=='sold'&&(p.n==null||p.n>0));
+  const closed=allPos.filter(p=>p.status==='sold'||p.n===0);
+  const soldBuilt=closed.map(p=>{
+    const fi=fifoEngine(p.transactions||[]);
+    const lastSell=fi.sells.length?fi.sells[fi.sells.length-1]:null;
+    const entry=p.transactions?.find(t=>t.type==='buy')?.date||'';
+    const exit=lastSell?.date||'';
+    const totalBought=p.transactions?.filter(t=>t.type==='buy').reduce((s,t)=>s+t.n,0)||0;
+    return{
+      t:p.t,cat:p.cat,sec:p.sec||'',name:p.name||p.t,country:p.country||'',
+      n:totalBought,sv:lastSell?.price||p.sv||0,
+      div:p.div||0,divByYear:p.divByYear||{},
+      entry,exit,note:p.note||'',transactions:p.transactions||[],
+    };
+  });
+  const explicitSold=(data.sold||[]).filter(s=>!soldBuilt.find(x=>x.t===s.t));
+  return{positions:active,sold:[...soldBuilt,...explicitSold]};
+}
+const WEALTH_KEYS=['ppr','aforro','depositos','juros','claudiaInvestimentos'];
+function hasAnyKey(obj,keys){return keys.some(key=>Object.prototype.hasOwnProperty.call(obj,key));}
+// Reads any file the app has ever exported. Returns {kind, data} where data holds
+// only the sections that file contains. kind 'full' replaces everything on import.
+function readDataFile(json,fileName){
+  const file=requireJsonRecord(json,fileName);
+  if(file.app===DATA_FILE_APP){
+    let version=file.schemaVersion,current=file;
+    if(!Number.isInteger(version))throw new Error(`${fileName}: schemaVersion em falta.`);
+    if(version>DATA_SCHEMA_VERSION)throw new Error(`${fileName} foi criado por uma versão mais recente da app. Actualiza a app e tenta de novo.`);
+    while(version<DATA_SCHEMA_VERSION){
+      const step=DATA_MIGRATIONS[version];
+      if(!step)throw new Error(`${fileName}: não sei converter a versão ${version}.`);
+      current=step(current);version=current.schemaVersion;
+    }
+    return{kind:'full',data:readDataFileV2(current)};
+  }
+  if(file.type==='income-factory-full-backup')return{kind:'full',data:readFullBackupV1(file)};
+  // Old single-section files (portfolio / metrics / config / wealth / teses .json).
+  const data={};
+  if(file.positions!==undefined||file.sold!==undefined){
+    const p=readLegacyPortfolio(file);
+    if(p.positions!==undefined)data.positions=p.positions;
+    if(p.sold!==undefined)data.sold=p.sold;
+  }else if(file.quality!==undefined||file.income!==undefined){
+    if(file.quality!==undefined)data.quality=validateImportedQuality(file.quality);
+    if(file.income!==undefined)data.legacyIncome=normalizeIncomeKeys(validateImportedIncome(file.income));
+  }else if(hasAnyKey(file,Object.keys(DCFG))){
+    const{version,exportedAt,...cfg}=file;
+    data.config=validateImportedConfig(cfg);
+  }else if(hasAnyKey(file,WEALTH_KEYS)){
+    const{version,exportedAt,...w}=file;
+    data.wealth=validateImportedWealth(w);
+  }else{
+    const theses=validateImportedTheses(file);
+    if(!Object.keys(theses).length)throw new Error(`${fileName}: não reconheço este ficheiro.`);
+    data.theses=theses;
+  }
+  return{kind:'partial',data};
+}
+// Combines several files picked together. One full file can be combined with
+// old single-section files; those then override its sections.
+function combineDataFiles(results){
+  const fulls=results.filter(r=>r.kind==='full');
+  if(fulls.length>1)throw new Error('Escolhe só um ficheiro income-factory.json de cada vez.');
+  const data=fulls.length?{...fulls[0].data}:{};
+  results.filter(r=>r.kind==='partial').forEach(r=>Object.assign(data,r.data));
+  return{full:fulls.length>0,data};
+}
+// Older metrics.json files carried dividends per ticker; they now live on each position's divByYear.
+function mergeLegacyIncome(positions,legacyIncome){
+  return positions.map(p=>{
+    if(p.divByYear)return p;
+    const byYear=incomeByYear(legacyIncome,p.t);
+    if(!byYear)return p;
+    const filtered=Object.fromEntries(Object.entries(byYear).filter(([,v])=>v));
+    if(!Object.keys(filtered).length)return p;
+    return{...p,divByYear:filtered,div:Object.values(filtered).reduce((s,v)=>s+v,0)};
+  });
+}
+function normalizeConfig(config){
+  const merged={...DCFG,...config};
+  ['whtByCountry','posCountry','etfTer'].forEach(k=>{
+    if(!merged[k]||Object.keys(merged[k]).length===0)merged[k]=DCFG[k];
+  });
+  return merged;
+}
+function openFilesPicker(accept,cb){
+  const inp=document.createElement('input');inp.type='file';inp.accept=accept;inp.multiple=true;
+  inp.onchange=e=>{const files=[...e.target.files];if(files.length)cb(files);};inp.click();
 }
 
 // ── Certificados de Aforro: maturidade (anos após a constituição) por série ──
@@ -3569,8 +3729,8 @@ function App(){
     const handler=e=>{
       const quotaExceeded=!!(e.detail&&e.detail.quotaExceeded);
       setToast(quotaExceeded
-        ?'Storage quota exceeded — export your JSONs in Config to avoid losing data!'
-        :'Não foi possível guardar os dados no navegador. Exporta os JSONs em Config e verifica o espaço disponível.');
+        ?'Espaço do browser esgotado — exporta o income-factory.json em Config para não perder dados!'
+        :'Não foi possível guardar os dados no navegador. Exporta o income-factory.json em Config e verifica o espaço disponível.');
       setTimeout(()=>setToast(''),7000);
     };
     window.addEventListener('storage-write-failed',handler);
@@ -3592,7 +3752,7 @@ function App(){
     // Reset all state — show the noData welcome screen
     setPos(null);setQual(null);setCfg(DCFG);setSold([]);setWealth(null);setTeses(null);
     setDirty(false);setTab('dashboard');setNoData(true);
-    setToast('Dados apagados — importa os teus JSONs para continuar');
+    setToast('Dados apagados — importa o teu income-factory.json para continuar');
     setTimeout(()=>setToast(''),4000);
   },[]);
 
@@ -3610,227 +3770,75 @@ function App(){
       writeStorageBatch(entries);
       _autoSaveSuspended.current=false;
       setDirty(false);
-      setToast('Guardado  —  exporta os JSONs no Config para persistir entre sessões');
+      setToast('Guardado — exporta o income-factory.json em Config para ter uma cópia fora do browser');
       setTimeout(()=>setToast(''),4000);
     }catch(e){
       _autoSaveSuspended.current=false;
       console.error('manual save failed',e);
-      setToast('Não foi possível guardar todos os dados. Exporta os JSONs em Config para criar uma cópia de segurança.');
+      setToast('Não foi possível guardar todos os dados. Exporta o income-factory.json em Config para criar uma cópia de segurança.');
       setTimeout(()=>setToast(''),7000);
     }
   },[pos,qual,cfg,sold,wealth,teses]);
 
-  // ── Per-JSON import handlers ─────────────────────────────────────────────
-  const importPortfolioJSON=useCallback(()=>{
-    openFilePicker('.json',async file=>{
-      try{
-        const data=requireJsonRecord(JSON.parse(await file.text()),'portfolio.json');
-        if(data.positions!==undefined)validateImportedPositions(data.positions,'positions');
-        if(data.sold!==undefined)validateImportedPositions(data.sold,'sold');
-        if(data.positions===undefined&&data.sold===undefined)throw new Error('Faltam as listas positions/sold.');
-        if(data.positions){
-          const allPos=data.positions.map(({dv,...r})=>r);
-          // New unified format: split by status='sold' or n===0
-          const hasNewFormat=allPos.some(p=>p.status==='sold'||p.transactions);
-          if(hasNewFormat){
-            const active=allPos.filter(p=>p.status!=='sold'&&(p.n==null||p.n>0));
-            const closed=allPos.filter(p=>p.status==='sold'||p.n===0);
-            const soldBuilt=closed.map(p=>{
-              const fi=fifoEngine(p.transactions||[]);
-              const lastSell=fi.sells.length?fi.sells[fi.sells.length-1]:null;
-              const entry=p.transactions?.find(t=>t.type==='buy')?.date||'';
-              const exit=lastSell?.date||'';
-              const totalBought=p.transactions?.filter(t=>t.type==='buy').reduce((s,t)=>s+t.n,0)||0;
-              return{
-                t:p.t,cat:p.cat,sec:p.sec||'',name:p.name||p.t,country:p.country||'',
-                n:totalBought,sv:lastSell?.price||p.sv||0,
-                div:p.div||0,divByYear:p.divByYear||{},
-                entry,exit,note:p.note||'',transactions:p.transactions||[],
-              };
-            });
-            // Also merge any explicit sold[] array from the JSON (e.g. positions closed outside the positions array)
-            const explicitSold=(data.sold||[]).filter(s=>!soldBuilt.find(x=>x.t===s.t));
-            const allSold=[...soldBuilt,...explicitSold];
-            writeImportedBatch([['if_fp',JSON.stringify(active)],['if_fs',JSON.stringify(allSold)]]);
-            setPos(active);setSold(allSold);
-          } else {
-            const importedSold=data.sold||[];
-            writeImportedBatch([['if_fp',JSON.stringify(allPos)],['if_fs',JSON.stringify(importedSold)]]);
-            setPos(allPos);setSold(importedSold);
-          }
-          _autoSaveSuspended.current=false;
-          setNoData(false);
-          setToast('portfolio.json importado — '+(data.positions.filter(p=>p.status!=='sold'&&(p.n==null||p.n>0)).length)+' activas · '+(data.positions.filter(p=>p.status==='sold'||p.n===0).length)+' fechadas');
-          setTimeout(()=>setToast(''),3000);
-        } else if(data.sold){
-          writeImportedBatch([['if_fs',JSON.stringify(data.sold)]]);
-          _autoSaveSuspended.current=false;
-          setSold(data.sold);
-          setToast('portfolio.json importado');setTimeout(()=>setToast(''),2500);
-        }
-      }catch(err){setToast('Erro: '+err.message);setTimeout(()=>setToast(''),3000);}
-    });
-  },[]);
-
-  const importMetricsJSON=useCallback(()=>{
-    openFilePicker('.json',async file=>{
-      try{
-        const data=requireJsonRecord(JSON.parse(await file.text()),'metrics.json');
-        if(data.quality!==undefined)validateImportedQuality(data.quality);
-        if(data.income!==undefined)validateImportedIncome(data.income);
-        if(data.quality===undefined&&data.income===undefined)throw new Error('Falta quality ou income.');
-        const importedQuality=data.quality?.map(q=>{const clean=cleanQuality(q);return{...clean,sc:calcScore(clean)};});
-        // Legacy support: older metrics.json files carried a separate income{}
-        // object. Dividend history now lives on each position's own divByYear
-        // (single source of truth, matching how closed positions already
-        // worked) — merge it in instead of storing it separately. No-ops for
-        // positions that already carry their own divByYear.
-        if(data.income){
-          const legacyIncome=normalizeIncomeKeys(data.income);
-          const currentPos=(await dbg('fp'))||[];
-          const mergedPos=currentPos.map(p=>{
-            if(p.divByYear)return p;
-            const byYear=incomeByYear(legacyIncome,p.t);
-            if(!byYear)return p;
-            const filtered=Object.fromEntries(Object.entries(byYear).filter(([,v])=>v));
-            if(!Object.keys(filtered).length)return p;
-            return{...p,divByYear:filtered,div:Object.values(filtered).reduce((s,v)=>s+v,0)};
-          });
-          const entries=[['if_fp',JSON.stringify(mergedPos)]];
-          if(importedQuality)entries.push(['if_fq',JSON.stringify(importedQuality)]);
-          writeImportedBatch(entries);
-          setPos(mergedPos);
-        }else if(importedQuality){
-          writeImportedBatch([['if_fq',JSON.stringify(importedQuality)]]);
-        }
-        _autoSaveSuspended.current=false;
-        if(importedQuality)setQual(importedQuality);
-        setToast('metrics.json importado');setTimeout(()=>setToast(''),2500);
-      }catch(error){console.error('metrics import failed',error);setToast('Erro ao importar metrics.json: '+error.message);setTimeout(()=>setToast(''),4000);}
-    });
-  },[]);
-
-  const importConfigJSON=useCallback(()=>{
-    openFilePicker('.json',async file=>{
-      try{
-        const data=validateImportedConfig(JSON.parse(await file.text()));
-        const merged={...DCFG,...data};
-        ['whtByCountry','posCountry','etfTer'].forEach(k=>{
-          if(!merged[k]||Object.keys(merged[k]).length===0){merged[k]=DCFG[k];}
-        });
-        writeImportedBatch([['if_fc',JSON.stringify(merged)]]);
-        _autoSaveSuspended.current=false;
-        setCfg(merged);
-        setToast('config.json importado');setTimeout(()=>setToast(''),2500);
-      }catch(error){console.error('config import failed',error);setToast('Erro ao importar config.json: '+error.message);setTimeout(()=>setToast(''),4000);}
-    });
-  },[]);
-
-  // ── Per-JSON export handlers ─────────────────────────────────────────────
+  // ── Data file import / export (income-factory.json) ──────────────────────
   const tod=useMemo(()=>new Date().toISOString().slice(0,10),[]);
-  const exportPortfolioJSON=useCallback(()=>{
-    // Export unified format: all positions in one array, closed ones have status:'sold'
-    const activePos=(pos||[]).map(p=>({...p}));
-    const closedPos=(sold||[]).map(p=>({
-      ...p,status:'sold',n:0,
-      // keep transactions if present, otherwise reconstruct minimal buy+sell
-      transactions:p.transactions||[
-        ...(p.n&&p.av?[{date:p.entry||'',type:'buy',n:p.n,price:p.av}]:[]),
-        ...(p.sv?[{date:p.exit||'',type:'sell',n:p.n,price:p.sv}]:[]),
-      ],
-    }));
-    const allPositions=[...activePos,...closedPos];
-    dlJSON({version:2,exportedAt:new Date().toISOString(),positions:allPositions},'portfolio_'+tod+'.json');
-    setToast('portfolio.json exportado (formato unificado)');setTimeout(()=>setToast(''),2500);
-  },[pos,sold]);
-  const exportMetricsJSON=useCallback(()=>{
-    dlJSON({version:1,exportedAt:new Date().toISOString(),quality:(qual||[]).map(cleanQuality)},'metrics_'+tod+'.json');
-    setToast('metrics.json exportado');setTimeout(()=>setToast(''),2000);
-  },[qual]);
-  const importWealthJSON=useCallback(()=>{
-    openFilePicker('.json',async file=>{
-      try{
-        const data=validateImportedWealth(JSON.parse(await file.text()));
-        writeImportedBatch([['if_fw',JSON.stringify(data)]]);
-        _autoSaveSuspended.current=false;
-        setWealth(data);
-        setToast('wealth.json importado');setTimeout(()=>setToast(''),2500);
-      }catch(e){setToast('Erro ao importar wealth.json: '+e.message);setTimeout(()=>setToast(''),3500);}
-    });
-  },[]);
-  const exportWealthJSON=useCallback(()=>{
-    dlJSON({version:1,exportedAt:new Date().toISOString(),...(wealth||{ppr:[],aforro:[]})},'wealth_'+tod+'.json');
-    setToast('wealth.json exportado');setTimeout(()=>setToast(''),2000);
-  },[wealth]);
-  const importTesesJSON=useCallback(()=>{
-    openFilePicker('.json',async file=>{
-      try{
-        const data=validateImportedTheses(JSON.parse(await file.text()));
-        writeImportedBatch([['if_ft',JSON.stringify(data)]]);
-        _autoSaveSuspended.current=false;
-        setTeses(data);
-        setToast('teses.json importado');setTimeout(()=>setToast(''),2500);
-      }catch(e){setToast('Erro ao importar teses.json: '+e.message);setTimeout(()=>setToast(''),3500);}
-    });
-  },[]);
-  const exportTesesJSON=useCallback(()=>{
-    dlJSON({version:1,exportedAt:new Date().toISOString(),...(teses||{})},'teses_'+tod+'.json');
-    setToast('teses.json exportado');setTimeout(()=>setToast(''),2000);
-  },[teses]);
-  const exportConfigJSON=useCallback(()=>{
-    dlJSON({version:1,exportedAt:new Date().toISOString(),...(cfg||DCFG)},'config_'+tod+'.json');
-    setToast('config.json exportado');setTimeout(()=>setToast(''),2000);
-  },[cfg]);
-  const exportFullBackup=useCallback(()=>{
+  const readValuations=()=>{
+    const raw=localStorage.getItem('if_vh');
+    return validateValuationHistory(raw===null?[]:JSON.parse(raw));
+  };
+  const exportData=useCallback(()=>{
     try{
-      const rawHistory=localStorage.getItem('if_vh');
-      const valuationHistory=validateValuationHistory(rawHistory===null?[]:JSON.parse(rawHistory));
-      downloadBlob(new Blob([JSON.stringify({
-        type:'income-factory-full-backup',version:1,exportedAt:new Date().toISOString(),
-        positions:pos||[],sold:sold||[],quality:(qual||[]).map(cleanQuality),
-        config:cfg||DCFG,wealth,teses,valuationHistory
-      },null,2)],{type:'application/json'}),'income-factory-backup_'+tod+'.json');
-      setToast('Backup completo exportado — inclui posições, métricas, configuração, património, teses e histórico.');
+      dlJSON(buildDataFile({pos,sold,qual,cfg,wealth,teses,valuations:readValuations()}),'income-factory_'+tod+'.json');
+      setToast('Dados exportados para income-factory_'+tod+'.json. Guarda este ficheiro fora do browser.');
     }catch(error){
-      console.error('full backup export failed',error);
-      setToast('Não foi possível exportar o backup completo: '+error.message);
+      console.error('data export failed',error);
+      setToast('Não foi possível exportar os dados: '+error.message);
     }
     setTimeout(()=>setToast(''),5000);
-  },[pos,sold,qual,cfg,wealth,teses]);
-  const importFullBackup=useCallback(()=>{
-    openFilePicker('.json',async file=>{
+  },[pos,sold,qual,cfg,wealth,teses,tod]);
+  const importData=useCallback(()=>{
+    openFilesPicker('.json,application/json',async files=>{
       try{
-        const backup=requireJsonRecord(JSON.parse(await file.text()),'backup completo');
-        if(backup.type!=='income-factory-full-backup'||backup.version!==1)throw new Error('Tipo ou versão de backup não suportados.');
-        const positions=validateImportedPositions(backup.positions,'positions');
-        const closed=validateImportedPositions(backup.sold,'sold');
-        const quality=validateImportedQuality(backup.quality);
-        const config=validateImportedConfig(backup.config);
-        const backupWealth=backup.wealth===null?null:validateImportedWealth(backup.wealth);
-        const theses=backup.teses===null?null:validateImportedTheses(backup.teses);
-        const valuationHistory=validateValuationHistory(backup.valuationHistory);
-        const normalizedConfig={...DCFG,...config};
-        ['whtByCountry','posCountry','etfTer'].forEach(key=>{
-          if(!normalizedConfig[key]||Object.keys(normalizedConfig[key]).length===0)normalizedConfig[key]=DCFG[key];
-        });
-        const normalizedQuality=quality.map(item=>{const clean=cleanQuality(item);return{...clean,sc:calcScore(clean)};});
-        writeImportedBatch([
-          ['if_fp',JSON.stringify(positions)],['if_fs',JSON.stringify(closed)],
-          ['if_fq',JSON.stringify(normalizedQuality)],['if_fc',JSON.stringify(normalizedConfig)],
-          ['if_fw',JSON.stringify(backupWealth)],['if_ft',JSON.stringify(theses)],
-          ['if_vh',JSON.stringify(valuationHistory)]
-        ],['if_fi']);
-        _autoSaveSuspended.current=false;
-        setPos(positions);setSold(closed);setQual(normalizedQuality);setCfg(normalizedConfig);
-        setWealth(backupWealth);setTeses(theses);setNoData(false);
-        setToast('Backup completo validado e restaurado.');
+        const results=[];
+        for(const file of files){
+          let json;
+          try{json=JSON.parse(await file.text());}catch(e){throw new Error(`${file.name} não é JSON válido.`);}
+          results.push(readDataFile(json,file.name));
+        }
+        const{full,data}=combineDataFiles(results);
+        const d=full?{...emptyDataset(),...data}:data;
+        const entries=[];
+        let positions=d.positions;
+        if(d.legacyIncome){
+          positions=mergeLegacyIncome(positions!==undefined?positions:((await dbg('fp'))||[]),d.legacyIncome);
+        }
+        const quality=d.quality&&d.quality.map(item=>{const clean=cleanQuality(item);return{...clean,sc:calcScore(clean)};});
+        const config=d.config&&normalizeConfig(d.config);
+        if(positions!==undefined)entries.push(['if_fp',JSON.stringify(positions)]);
+        if(d.sold!==undefined)entries.push(['if_fs',JSON.stringify(d.sold)]);
+        if(quality)entries.push(['if_fq',JSON.stringify(quality)]);
+        if(config)entries.push(['if_fc',JSON.stringify(config)]);
+        if(d.wealth!==undefined)entries.push(['if_fw',JSON.stringify(d.wealth)]);
+        if(d.theses!==undefined)entries.push(['if_ft',JSON.stringify(d.theses)]);
+        if(d.valuations!==undefined)entries.push(['if_vh',JSON.stringify(d.valuations)]);
+        if(!entries.length)throw new Error('Nenhum dado encontrado.');
+        writeImportedBatch(entries,full?['if_fi']:[]);
+        if(positions!==undefined)setPos(positions);
+        if(d.sold!==undefined)setSold(d.sold);
+        if(quality)setQual(quality);
+        if(config)setCfg(config);
+        if(d.wealth!==undefined)setWealth(d.wealth);
+        if(d.theses!==undefined)setTeses(d.theses);
+        setNoData(false);
+        const nActive=(positions||pos||[]).length,nSold=(d.sold||sold||[]).length;
+        setToast((full?'Dados importados':'Ficheiros antigos importados')+` — ${nActive} activas · ${nSold} fechadas.`+(full?'':' Exporta agora para criar o teu income-factory.json.'));
       }catch(error){
-        console.error('full backup restore failed',error);
-        setToast('Backup não restaurado: '+error.message);
+        console.error('data import failed',error);
+        setToast('Dados não importados: '+error.message);
       }
-      setTimeout(()=>setToast(''),5000);
+      setTimeout(()=>setToast(''),6000);
     });
-  },[]);
+  },[pos,sold]);
   const importBrokerQuotes=useCallback(()=>{
     openFilePicker('.csv,text/csv',async file=>{
       try{
@@ -4245,27 +4253,21 @@ function App(){
         h('div',{style:{fontSize:40,marginBottom:12}},'◈'),
         h('h2',{className:'text-[18px] font-bold text-slate-200 mb-2'},'income factory'),
         h('p',{className:'font-mono text-xs text-[var(--muted)]'},
-          'Sem dados encontrados. Importa os teus ficheiros JSON ou começa do zero.')
+          'Sem dados encontrados. Importa o teu ficheiro income-factory.json ou começa do zero.')
       ),
       h('div',{style:{display:'flex',flexDirection:'column',gap:10}},
-        [
-          {label:'portfolio.json',desc:'Posições activas + vendidas + dividendos por ano',fn:importPortfolioJSON},
-          {label:'metrics.json',desc:'Quality scores fundamentais',fn:importMetricsJSON},
-          {label:'config.json',desc:'Thresholds de scoring + mapeamentos',fn:importConfigJSON},
-          {label:'wealth.json',desc:'PPR + Certificados de Aforro + Depósitos',fn:importWealthJSON},
-        ].map(({label,desc,fn:onImport})=>
-          h('div',{key:label,className:'card-sm'},
-            h('div',{style:{fontSize:12,fontWeight:700,color:'var(--gold)',marginBottom:4}},label),
-            h('div',{style:{fontSize:10,color:'var(--muted)',marginBottom:10}},desc),
-            h('button',{className:'btn-primary ml-0',onClick:onImport},'Importar')
-          )
+        h('div',{className:'card-sm',style:{textAlign:'center'}},
+          h('div',{style:{fontSize:12,fontWeight:700,color:'var(--gold)',marginBottom:4}},'income-factory.json'),
+          h('div',{style:{fontSize:10,color:'var(--muted)',marginBottom:12,lineHeight:1.5}},
+            'Um só ficheiro com posições, métricas, configuração, património, teses e histórico. Também aceita os ficheiros antigos (portfolio, metrics, config, wealth, teses): selecciona-os todos de uma vez.'),
+          h('button',{className:'btn-primary ml-0',onClick:importData},'Importar dados')
         ),
         h('div',{style:{textAlign:'center',paddingTop:8}},
           h('button',{
             onClick:()=>{_autoSaveSuspended.current=false;_loaded.current=true;setPos([]);setQual([]);setSold([]);setWealth(null);setTeses(null);setCfg(DCFG);setNoData(false);},
             style:{background:'transparent',border:'none',color:'var(--muted)',fontSize:12,cursor:'pointer',textDecoration:'underline'}
           },'Continuar sem dados (portfolio vazio)'),
-          h('div',{style:{fontSize:10,color:'var(--muted)',marginTop:12,fontFamily:'IBM Plex Mono,monospace'}},'Última release: '+(window.APP_RELEASE||'').split('-').reverse().join('/'))
+          h('div',{style:{fontSize:10,color:'var(--muted)',marginTop:12,fontFamily:'IBM Plex Mono,monospace'}},'Última release: '+(([d,n])=>d.split('-').reverse().join('/')+(n?' · #'+n:''))((window.APP_RELEASE||'').split('.')))
         )
       ),
       toast&&h('div',{className:'toast'},toast)
@@ -4292,8 +4294,8 @@ function App(){
     h('div',{className:'page'},
       tab==='dashboard'&&h(Dash,{pos:safePos,qual:safeQual,income:safeInc,sold:safeSold,cfg,setCfg,wealth}),
       tab==='portfolio'&&h(Port,{pos:safePos,setPos,income:safeInc,qual:safeQual,setQual,cfg,sold:safeSold,setSold}),
-      tab==='transactions'&&h(TransactionsPage,{cfg,pos:safePos,setPos,sold:safeSold,setSold,income:safeInc,qual:safeQual,setQual,exportPortfolioJSON}),
-      tab==='config'&&h(Conf,{cfg,setCfg,pos:safePos,setPos,sold:safeSold,setSold,income:safeInc,qual:safeQual,setQual,onReset:handleReset,exportCSV,importPortfolioJSON,importMetricsJSON,importConfigJSON,importWealthJSON,importTesesJSON,exportPortfolioJSON,exportMetricsJSON,exportConfigJSON,exportWealthJSON,exportTesesJSON,exportFullBackup,importFullBackup,importBrokerQuotes,exportBrokerQuoteTemplate}),
+      tab==='transactions'&&h(TransactionsPage,{cfg,pos:safePos,setPos,sold:safeSold,setSold,income:safeInc,qual:safeQual,setQual}),
+      tab==='config'&&h(Conf,{cfg,setCfg,pos:safePos,setPos,sold:safeSold,setSold,income:safeInc,qual:safeQual,setQual,onReset:handleReset,exportCSV,importData,exportData,importBrokerQuotes,exportBrokerQuoteTemplate}),
       tab==='dividendos'&&h(DividendosPage,{pos:safePos,income:safeInc,qual:safeQual,sold:safeSold,cfg}),
       tab==='analytics'&&h(AnalyticsPage,{pos:safePos,qual:safeQual,income:safeInc,sold:safeSold,cfg,wealth}),
       tab==='teses'&&h(TesesPage,{pos:safePos,teses,qual:safeQual}),
@@ -5479,7 +5481,7 @@ function BrokerSelect({value,list,onChange,style}){
     value&&!known&&h('option',{key:'__other',value},value+' (fora da lista)')
   );
 }
-function Conf({cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onReset,exportCSV,importPortfolioJSON,importMetricsJSON,importConfigJSON,importWealthJSON,importTesesJSON,exportPortfolioJSON,exportMetricsJSON,exportConfigJSON,exportWealthJSON,exportTesesJSON,exportFullBackup,importFullBackup,importBrokerQuotes,exportBrokerQuoteTemplate}){
+function Conf({cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onReset,exportCSV,importData,exportData,importBrokerQuotes,exportBrokerQuoteTemplate}){
   const[confTab,setConfTab]=useState('config');
   const tabBtn=(id,label)=>h('button',{key:id,className:'fb'+(confTab===id?' on':''),onClick:()=>setConfTab(id)},label);
   return h('div',null,
@@ -5497,48 +5499,15 @@ function Conf({cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onReset,ex
         ''
       ),
 
-      /* Portfolio */
+      /* Data file */
       h('div',{className:'input-row'},
-        MicroLabel('portfolio.json — Posições + Dividendos',{size:9,mb:8}),
+        MicroLabel('income-factory.json — Todos os dados',{size:9,mb:8}),
+        h('div',{style:{fontSize:10,color:'var(--muted)',marginBottom:8,lineHeight:1.5}},
+          'Posições, transacções, métricas, configuração, património, teses e histórico num só ficheiro. Importar substitui os dados actuais. Guarda o ficheiro exportado fora do browser.'
+        ),
         h('div',{className:'flex gap-1.5'},
-          h('button',{className:'btn-primary ml-0 flex-1',onClick:importPortfolioJSON},'Importar'),
-          h('button',{className:'btn-secondary ml-0 flex-1',onClick:exportPortfolioJSON},'Exportar'),
-        )
-      ),
-
-      /* Metrics */
-      h('div',{className:'input-row'},
-        MicroLabel('metrics.json — Quality Metrics',{size:9,mb:8}),
-        h('div',{className:'flex gap-1.5'},
-          h('button',{className:'btn-primary ml-0 flex-1',onClick:importMetricsJSON},'Importar'),
-          h('button',{className:'btn-secondary ml-0 flex-1',onClick:exportMetricsJSON},'Exportar'),
-        )
-      ),
-
-      /* Config */
-      h('div',{className:'input-row'},
-        MicroLabel('config.json — Thresholds + Prefs',{size:9,mb:8}),
-        h('div',{className:'flex gap-1.5'},
-          h('button',{className:'btn-primary ml-0 flex-1',onClick:importConfigJSON},'Importar'),
-          h('button',{className:'btn-secondary ml-0 flex-1',onClick:exportConfigJSON},'Exportar'),
-        )
-      ),
-
-      /* Wealth */
-      h('div',{className:'input-row'},
-        MicroLabel('wealth.json — Todo o património familiar',{size:9,mb:8}),
-        h('div',{className:'flex gap-1.5'},
-          h('button',{className:'btn-primary ml-0 flex-1',onClick:importWealthJSON},'Importar'),
-          h('button',{className:'btn-secondary ml-0 flex-1',onClick:exportWealthJSON},'Exportar'),
-        )
-      ),
-
-      /* Teses */
-      h('div',{className:'input-row'},
-        MicroLabel('teses.json — Teses de Investimento',{size:9,mb:8}),
-        h('div',{className:'flex gap-1.5'},
-          h('button',{className:'btn-primary ml-0 flex-1',onClick:importTesesJSON},'Importar'),
-          h('button',{className:'btn-secondary ml-0 flex-1',onClick:exportTesesJSON},'Exportar'),
+          h('button',{className:'btn-primary ml-0 flex-1',onClick:importData},'Importar'),
+          h('button',{className:'btn-secondary ml-0 flex-1',onClick:exportData},'Exportar'),
         )
       ),
 
@@ -5553,17 +5522,6 @@ function Conf({cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onReset,ex
         ),
         cfg?.quotesImportedAt&&h('div',{style:{fontSize:9,color:'var(--muted)',marginTop:6}},
           'Última importação: '+new Date(cfg.quotesImportedAt).toLocaleString('pt-PT')
-        )
-      ),
-
-      h('div',{className:'input-row'},
-        MicroLabel('Backup completo da aplicação',{size:9,mb:8}),
-        h('div',{style:{fontSize:10,color:'var(--muted)',marginBottom:8,lineHeight:1.5}},
-          'Inclui posições, transacções, métricas, configuração, património, teses e histórico de avaliações. Guarda este ficheiro fora do browser.'
-        ),
-        h('div',{className:'flex gap-1.5'},
-          h('button',{className:'btn-primary ml-0 flex-1',onClick:importFullBackup},'Restaurar backup'),
-          h('button',{className:'btn-secondary ml-0 flex-1',onClick:exportFullBackup},'Exportar backup'),
         )
       ),
 
@@ -6022,7 +5980,7 @@ function AllTransactions({pos,sold,cfg}){
     )
   );
 }
-function TransactionsPage({cfg,pos,setPos,sold,setSold,income,qual,setQual,exportPortfolioJSON}){
+function TransactionsPage({cfg,pos,setPos,sold,setSold,income,qual,setQual}){
   const[txTab,setTxTab]=useState('alltx');
   const tabBtn=(id,label)=>h('button',{key:id,className:'fb'+(txTab===id?' on':''),onClick:()=>setTxTab(id)},label);
   return h('div',null,
