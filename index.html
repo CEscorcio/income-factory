@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-25.6';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-25.7';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1653,6 +1653,9 @@ function readLegacyPortfolio(data){
   return{positions:active,sold:[...soldBuilt,...explicitSold]};
 }
 const WEALTH_KEYS=['ppr','aforro','depositos','juros','claudiaInvestimentos'];
+// An old teses.json is an object of theses; each one has at least one of these sections.
+const THESIS_FIELDS=['name','meta','thesis','business','moat','dividends','financials','keyPhrase','finalDecision'];
+function looksLikeThesis(entry){return hasAnyKey(entry,THESIS_FIELDS);}
 function hasAnyKey(obj,keys){return keys.some(key=>Object.prototype.hasOwnProperty.call(obj,key));}
 // Reads any file the app has ever exported. Returns {kind, data} where data holds
 // only the sections that file contains. kind 'full' replaces everything on import.
@@ -1687,7 +1690,8 @@ function readDataFile(json,fileName){
     data.wealth=validateImportedWealth(w);
   }else{
     const theses=validateImportedTheses(file);
-    if(!Object.keys(theses).length)throw new Error(`${fileName}: não reconheço este ficheiro.`);
+    const entries=Object.values(theses);
+    if(!entries.length||!entries.every(looksLikeThesis))throw new Error(`${fileName}: não reconheço este ficheiro.`);
     data.theses=theses;
   }
   return{kind:'partial',data,fileName};
@@ -1726,13 +1730,14 @@ function normalizeConfig(config){
   });
   return merged;
 }
-// In the installed app (standalone) a plain download is unreliable on iOS, so the
+// In the installed app on iPhone/iPad a plain download is unreliable, so the
 // file goes to the share sheet ("Guardar em Ficheiros"). Elsewhere it downloads.
 // Must be called directly from a click: navigator.share needs the user gesture.
 function saveJsonFile(data,filename){
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const standalone=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;
-  if(standalone&&navigator.canShare&&typeof File==='function'){
+  const ios=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  if(standalone&&ios&&navigator.canShare&&typeof File==='function'){
     const file=new File([blob],filename,{type:'application/json'});
     if(navigator.canShare({files:[file]})){
       return navigator.share({files:[file],title:filename}).then(()=>'shared',error=>{
@@ -1767,19 +1772,20 @@ async function fetchEcbRates(){
   throw new Error('Não foi possível obter as taxas do BCE ('+(lastError?.message||'sem rede')+').');
 }
 // Exchanges, keyed by the Yahoo-style suffix used in tickers (NN.AS, COR.LS, ...).
-// mic = ISO market code (Twelve Data), eod = EODHD exchange code, av = Alpha Vantage suffix.
+// mic = ISO market code (Twelve Data), av = Alpha Vantage suffix.
+// (EODHD was tried and left out: it does not allow requests from a browser.)
 const PRICE_EXCHANGES={
-  US:{name:'EUA',currency:'USD',mic:null,eod:'US',av:''},
-  L: {name:'Londres',currency:'GBp',mic:'XLON',eod:'LSE',av:'.LON'},
-  AS:{name:'Amesterdão',currency:'EUR',mic:'XAMS',eod:'AS',av:'.AMS'},
-  LS:{name:'Lisboa',currency:'EUR',mic:'XLIS',eod:'LS',av:'.LIS'},
-  MI:{name:'Milão',currency:'EUR',mic:'XMIL',eod:'MI',av:'.MIL'},
-  DE:{name:'Xetra',currency:'EUR',mic:'XETR',eod:'XETRA',av:'.DEX'},
-  F: {name:'Frankfurt',currency:'EUR',mic:'XFRA',eod:'F',av:'.FRK'},
-  BE:{name:'Berlim',currency:'EUR',mic:'XBER',eod:'BE',av:'.BER'},
-  PA:{name:'Paris',currency:'EUR',mic:'XPAR',eod:'PA',av:'.PAR'},
-  MC:{name:'Madrid',currency:'EUR',mic:'XMAD',eod:'MC',av:'.MAD'},
-  CO:{name:'Copenhaga',currency:'DKK',mic:'XCSE',eod:'CO',av:'.CPH'},
+  US:{name:'EUA',currency:'USD',mic:null,av:''},
+  L: {name:'Londres',currency:'GBp',mic:'XLON',av:'.LON'},
+  AS:{name:'Amesterdão',currency:'EUR',mic:'XAMS',av:'.AMS'},
+  LS:{name:'Lisboa',currency:'EUR',mic:'XLIS',av:'.LIS'},
+  MI:{name:'Milão',currency:'EUR',mic:'XMIL',av:'.MIL'},
+  DE:{name:'Xetra',currency:'EUR',mic:'XETR',av:'.DEX'},
+  F: {name:'Frankfurt',currency:'EUR',mic:'XFRA',av:'.FRK'},
+  BE:{name:'Berlim',currency:'EUR',mic:'XBER',av:'.BER'},
+  PA:{name:'Paris',currency:'EUR',mic:'XPAR',av:'.PAR'},
+  MC:{name:'Madrid',currency:'EUR',mic:'XMAD',av:'.MAD'},
+  CO:{name:'Copenhaga',currency:'DKK',mic:'XCSE',av:'.CPH'},
 };
 // Symbol used to ask for a price. Tickers without suffix are US listings, except
 // non-USD British positions (e.g. LGEN), which trade in London.
@@ -1831,24 +1837,13 @@ const PRICE_PROVIDERS={
       const info=json.Note||json.Information;
       if(info){
         if(/premium/i.test(info))throw new Error('Só disponível em plano pago deste fornecedor.');
-        if(/rate limit|requests per|per day|per minute/i.test(info))throw new Error('Limite de pedidos atingido.');
+        if(/rate limit|requests per|per day|per minute/i.test(info))throw new Error(RATE_LIMIT_MESSAGE);
         throw new Error(String(info).slice(0,100));
       }
       if(json['Error Message'])throw new Error('Símbolo não encontrado.');
       const q=json['Global Quote'];
       if(!q||!q['05. price'])throw new Error('Símbolo não encontrado.');
       return{price:parseFloat(q['05. price']),date:q['07. latest trading day']||'',currency:null};
-    },
-  },
-  eodhd:{
-    name:'EODHD',site:'eodhd.com',delayMs:1200,dailyLimit:20,
-    note:'Grátis: 20 pedidos/dia. Cobre bolsas europeias.',
-    url:(s,key)=>`https://eodhd.com/api/real-time/${enc(s.base)}.${s.exchange.eod}?api_token=${enc(key)}&fmt=json`,
-    parse:json=>{
-      const price=Number(json.close);
-      if(!Number.isFinite(price)||price<=0)throw new Error('Símbolo não encontrado.');
-      const date=Number.isFinite(json.timestamp)?new Date(json.timestamp*1000).toISOString().slice(0,10):'';
-      return{price,date,currency:null};
     },
   },
   finnhub:{
@@ -1891,7 +1886,14 @@ function writePriceKey(provider,key){
   try{if(key)localStorage.setItem(PRICE_KEY_PREFIX+provider,key);else localStorage.removeItem(PRICE_KEY_PREFIX+provider);}
   catch(e){console.error('save price key failed',e);}
 }
+const RATE_LIMIT_MESSAGE='Limite de pedidos atingido.';
+// Providers sometimes echo the API key in their messages; never show it.
+function maskKey(message,key){return key&&key.length>3?String(message).split(key).join('•••'):String(message);}
 async function fetchQuote(providerId,symbol,key){
+  try{return await fetchQuoteRaw(providerId,symbol,key);}
+  catch(error){throw new Error(maskKey(error.message,key));}
+}
+async function fetchQuoteRaw(providerId,symbol,key){
   const provider=PRICE_PROVIDERS[providerId];
   const s=parsePriceSymbol(symbol);
   let res;
@@ -1905,7 +1907,7 @@ async function fetchQuote(providerId,symbol,key){
     if(detail&&/plan|upgrad|subscri|premium|access/i.test(detail))throw new Error('Só disponível em plano pago deste fornecedor.');
     if(res.status===401||res.status===403)throw new Error('Sem acesso: chave inválida ou ticker fora do plano.');
     if(res.status===404)throw new Error(detail?'Não encontrado: '+String(detail).slice(0,80):'Símbolo não encontrado.');
-    if(res.status===429)throw new Error('Limite de pedidos atingido.');
+    if(res.status===429)throw new Error(RATE_LIMIT_MESSAGE);
     throw new Error('Erro HTTP '+res.status+(detail?': '+String(detail).slice(0,80):'.'));
   }
   const quote=provider.parse(json||{});
@@ -4019,7 +4021,7 @@ function App(){
         const entries=[];
         let positions=d.positions;
         if(d.legacyIncome){
-          positions=mergeLegacyIncome(positions!==undefined?positions:((await dbg('fp'))||[]),d.legacyIncome);
+          positions=mergeLegacyIncome(positions!==undefined?positions:(pos||[]),d.legacyIncome);
         }
         const quality=d.quality&&d.quality.map(item=>{const clean=cleanQuality(item);return{...clean,sc:calcScore(clean)};});
         const config=d.config&&normalizeConfig(d.config);
@@ -4034,6 +4036,7 @@ function App(){
         writeImportedBatch(entries,full?['if_fi']:[]);
         const restoredKeys=d.priceKeys?Object.entries(d.priceKeys):[];
         restoredKeys.forEach(([id,key])=>writePriceKey(id,key));
+        if(restoredKeys.length)window.dispatchEvent(new Event('price-keys-changed'));
         if(positions!==undefined)setPos(positions);
         if(d.sold!==undefined)setSold(d.sold);
         if(quality)setQual(quality);
@@ -5711,6 +5714,15 @@ function PricePanel({cfg,setCfg,pos,setPos}){
   const[running,setRunning]=useState(false);
   const[message,setMessage]=useState('');
   const cancel=useRef(false);
+  const readAllKeys=()=>Object.fromEntries(Object.keys(PRICE_PROVIDERS).map(id=>[id,readPriceKey(id)]));
+  // 1. Leaving Config stops a running test (it would keep spending the daily quota).
+  useEffect(()=>()=>{cancel.current=true;},[]);
+  // 3. Keys restored by an import while Config is open.
+  useEffect(()=>{
+    const refresh=()=>setKeys(readAllKeys());
+    window.addEventListener('price-keys-changed',refresh);
+    return()=>window.removeEventListener('price-keys-changed',refresh);
+  },[]);
   const fb=fallback&&fallback!==provider?fallback:'';
   const active=(pos||[]).filter(p=>(p.n==null||p.n>0)&&p.t);
   const symbolFor=p=>(cfg?.priceSymbols&&cfg.priceSymbols[p.t])||defaultPriceSymbol(p);
@@ -5744,9 +5756,11 @@ function PricePanel({cfg,setCfg,pos,setPos}){
     for(const pass of passes){
       const info=PRICE_PROVIDERS[pass.id];
       const idx=pass.pick();
+      let limited=false;
       for(let k=0;k<idx.length;k++){
         if(cancel.current)break;
         const i=idx[k];
+        if(limited){next[i]={...next[i],status:'error',error:info.name+': '+RATE_LIMIT_MESSAGE+' Tenta amanhã.',apply:false};continue;}
         if(k>0)await new Promise(r=>setTimeout(r,info.delayMs));
         if(cancel.current)break;
         setMessage(`${info.name}: ${next[i].symbol} (${k+1}/${idx.length})…`);
@@ -5756,7 +5770,10 @@ function PricePanel({cfg,setCfg,pos,setPos}){
           next[i]={...next[i],status:'error',error:info.name+' não cobre esta bolsa.',apply:false};
         }else{
           try{next[i]={...next[i],...(await ask(i,pass.id))};}
-          catch(error){next[i]={...next[i],status:'error',error:(prevError&&pass.id!==provider?prevError+' / ':'')+info.name+': '+error.message,apply:false};}
+          catch(error){
+            next[i]={...next[i],status:'error',error:(prevError&&pass.id!==provider?prevError+' / ':'')+info.name+': '+error.message,apply:false};
+            if(error.message===RATE_LIMIT_MESSAGE)limited=true;
+          }
         }
         setRows([...next]);
       }
@@ -5785,7 +5802,7 @@ function PricePanel({cfg,setCfg,pos,setPos}){
   };
   const fmt=(v,d=2)=>Number.isFinite(v)?v.toFixed(d):'—';
   const cell={padding:'4px 6px',fontSize:10,borderBottom:'1px solid var(--border)',whiteSpace:'nowrap'};
-  const short={twelvedata:'TD',alphavantage:'AV',eodhd:'EOD',finnhub:'FH'};
+  const short={twelvedata:'TD',alphavantage:'AV',finnhub:'FH'};
   const providerRow=(label,id,onChange,options)=>h('div',{style:{marginBottom:6}},
     h('div',{style:{fontSize:9,color:'var(--muted)',marginBottom:3}},label),
     h('div',{className:'flex gap-1.5'},
