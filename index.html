@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release, junto com CACHE em sw.js */window.APP_RELEASE='2026-11-25';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-25.7';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1545,6 +1545,374 @@ function validateValuationHistory(value){
     }
   });
   return value;
+}
+
+// ── Data file: income-factory.json ──────────────────────────────────────────
+// All app data travels in one versioned file. To add a new kind of data:
+//   1. add a key to emptyDataset() and to buildDataFile(),
+//   2. read it in readDataFileV2() (and in any older reader if it has a default),
+//   3. store it in the app's applyDataset().
+// If the shape of an existing section changes, bump DATA_SCHEMA_VERSION and add
+// a step to DATA_MIGRATIONS that converts the previous version, so old files keep importing.
+const DATA_FILE_APP='income-factory';
+const DATA_SCHEMA_VERSION=2;
+const DATA_MIGRATIONS={
+  // 2: { ... } → 3: { ... }   e.g. 2:file=>({...file,schemaVersion:3,newSection:[]})
+};
+function emptyDataset(){
+  return{positions:[],sold:[],quality:[],config:{...DCFG},wealth:null,theses:null,valuations:[]};
+}
+// Active and closed positions are kept apart in the app and joined in the file;
+// closed ones carry status:'sold' in the file only. Every other field is kept as is.
+function joinPortfolio(pos,sold){
+  return[...(pos||[]).map(p=>({...p})),...(sold||[]).map(p=>({...p,status:'sold'}))];
+}
+function splitPortfolio(positions){
+  return{
+    positions:positions.filter(p=>p.status!=='sold'),
+    sold:positions.filter(p=>p.status==='sold').map(({status,...p})=>p),
+  };
+}
+function buildDataFile({pos,sold,qual,cfg,wealth,teses,valuations,priceKeys}){
+  const keys=Object.fromEntries(Object.entries(priceKeys||{}).filter(([,v])=>v));
+  return{
+    app:DATA_FILE_APP,schemaVersion:DATA_SCHEMA_VERSION,exportedAt:new Date().toISOString(),
+    portfolio:{positions:joinPortfolio(pos,sold)},
+    quality:(qual||[]).map(cleanQuality),
+    config:cfg||DCFG,
+    wealth:wealth||null,
+    theses:teses||null,
+    history:{valuations:valuations||[]},
+    // Only when "Incluir as chaves no ficheiro" is ticked in Config → Cotações online.
+    ...(Object.keys(keys).length?{secrets:{priceKeys:keys}}:{}),
+  };
+}
+function readPriceKeysSection(secrets){
+  if(secrets==null)return undefined;
+  const keys=requireJsonRecord(secrets,'secrets').priceKeys;
+  if(keys==null)return undefined;
+  requireJsonRecord(keys,'secrets.priceKeys');
+  const out={};
+  Object.entries(keys).forEach(([id,key])=>{
+    if(!PRICE_PROVIDERS[id])return;
+    if(typeof key!=='string')throw new Error(`secrets.priceKeys.${id} deve ser texto.`);
+    if(key.trim())out[id]=key.trim();
+  });
+  return out;
+}
+function readDataFileV2(file){
+  const portfolio=requireJsonRecord(file.portfolio||{positions:[]},'portfolio');
+  const{positions,sold}=splitPortfolio(validateImportedPositions(portfolio.positions||[],'portfolio.positions'));
+  return{
+    positions,sold,
+    quality:validateImportedQuality(file.quality||[]),
+    config:file.config?validateImportedConfig(file.config):{...DCFG},
+    wealth:file.wealth==null?null:validateImportedWealth(file.wealth),
+    theses:file.theses==null?null:validateImportedTheses(file.theses),
+    valuations:validateValuationHistory(file.history?.valuations||[]),
+    priceKeys:readPriceKeysSection(file.secrets),
+  };
+}
+// Old "Backup completo" (type income-factory-full-backup, version 1).
+function readFullBackupV1(backup){
+  if(backup.version!==1)throw new Error('Versão de backup não suportada.');
+  return{
+    positions:validateImportedPositions(backup.positions,'positions'),
+    sold:validateImportedPositions(backup.sold,'sold'),
+    quality:validateImportedQuality(backup.quality),
+    config:validateImportedConfig(backup.config),
+    wealth:backup.wealth===null?null:validateImportedWealth(backup.wealth),
+    theses:backup.teses===null?null:validateImportedTheses(backup.teses),
+    valuations:validateValuationHistory(backup.valuationHistory),
+  };
+}
+// Old portfolio.json: positions[] (closed ones with status:'sold' or n:0) and/or sold[].
+function readLegacyPortfolio(data){
+  if(data.positions!==undefined)validateImportedPositions(data.positions,'positions');
+  if(data.sold!==undefined)validateImportedPositions(data.sold,'sold');
+  if(!data.positions)return{positions:undefined,sold:data.sold};
+  const allPos=data.positions.map(({dv,...r})=>r);
+  const hasNewFormat=allPos.some(p=>p.status==='sold'||p.transactions);
+  if(!hasNewFormat)return{positions:allPos,sold:data.sold||[]};
+  const active=allPos.filter(p=>p.status!=='sold'&&(p.n==null||p.n>0));
+  const closed=allPos.filter(p=>p.status==='sold'||p.n===0);
+  const soldBuilt=closed.map(p=>{
+    const fi=fifoEngine(p.transactions||[]);
+    const lastSell=fi.sells.length?fi.sells[fi.sells.length-1]:null;
+    const entry=p.transactions?.find(t=>t.type==='buy')?.date||'';
+    const exit=lastSell?.date||'';
+    const totalBought=p.transactions?.filter(t=>t.type==='buy').reduce((s,t)=>s+t.n,0)||0;
+    return{
+      t:p.t,cat:p.cat,sec:p.sec||'',name:p.name||p.t,country:p.country||'',
+      n:totalBought,sv:lastSell?.price||p.sv||0,
+      div:p.div||0,divByYear:p.divByYear||{},
+      entry,exit,note:p.note||'',transactions:p.transactions||[],
+    };
+  });
+  const explicitSold=(data.sold||[]).filter(s=>!soldBuilt.find(x=>x.t===s.t));
+  return{positions:active,sold:[...soldBuilt,...explicitSold]};
+}
+const WEALTH_KEYS=['ppr','aforro','depositos','juros','claudiaInvestimentos'];
+// An old teses.json is an object of theses; each one has at least one of these sections.
+const THESIS_FIELDS=['name','meta','thesis','business','moat','dividends','financials','keyPhrase','finalDecision'];
+function looksLikeThesis(entry){return hasAnyKey(entry,THESIS_FIELDS);}
+function hasAnyKey(obj,keys){return keys.some(key=>Object.prototype.hasOwnProperty.call(obj,key));}
+// Reads any file the app has ever exported. Returns {kind, data} where data holds
+// only the sections that file contains. kind 'full' replaces everything on import.
+function readDataFile(json,fileName){
+  const file=requireJsonRecord(json,fileName);
+  if(file.app===DATA_FILE_APP){
+    let version=file.schemaVersion,current=file;
+    if(!Number.isInteger(version))throw new Error(`${fileName}: schemaVersion em falta.`);
+    if(version>DATA_SCHEMA_VERSION)throw new Error(`${fileName} foi criado por uma versão mais recente da app. Actualiza a app e tenta de novo.`);
+    while(version<DATA_SCHEMA_VERSION){
+      const step=DATA_MIGRATIONS[version];
+      if(!step)throw new Error(`${fileName}: não sei converter a versão ${version}.`);
+      current=step(current);version=current.schemaVersion;
+    }
+    return{kind:'full',data:readDataFileV2(current)};
+  }
+  if(file.type==='income-factory-full-backup')return{kind:'full',data:readFullBackupV1(file)};
+  // Old single-section files (portfolio / metrics / config / wealth / teses .json).
+  const data={};
+  if(file.positions!==undefined||file.sold!==undefined){
+    const p=readLegacyPortfolio(file);
+    if(p.positions!==undefined)data.positions=p.positions;
+    if(p.sold!==undefined)data.sold=p.sold;
+  }else if(file.quality!==undefined||file.income!==undefined){
+    if(file.quality!==undefined)data.quality=validateImportedQuality(file.quality);
+    if(file.income!==undefined)data.legacyIncome=normalizeIncomeKeys(validateImportedIncome(file.income));
+  }else if(hasAnyKey(file,Object.keys(DCFG))){
+    const{version,exportedAt,...cfg}=file;
+    data.config=validateImportedConfig(cfg);
+  }else if(hasAnyKey(file,WEALTH_KEYS)){
+    const{version,exportedAt,...w}=file;
+    data.wealth=validateImportedWealth(w);
+  }else{
+    const theses=validateImportedTheses(file);
+    const entries=Object.values(theses);
+    if(!entries.length||!entries.every(looksLikeThesis))throw new Error(`${fileName}: não reconheço este ficheiro.`);
+    data.theses=theses;
+  }
+  return{kind:'partial',data,fileName};
+}
+// Combines several files picked together. One full file can be combined with
+// old single-section files; those then override its sections.
+function combineDataFiles(results){
+  const fulls=results.filter(r=>r.kind==='full');
+  if(fulls.length>1)throw new Error('Escolhe só um ficheiro income-factory.json de cada vez.');
+  const data=fulls.length?{...fulls[0].data}:{};
+  const seen={};
+  results.filter(r=>r.kind==='partial').forEach(r=>{
+    Object.keys(r.data).forEach(key=>{
+      if(seen[key])throw new Error(`${seen[key]} e ${r.fileName} têm os mesmos dados (${key}). Escolhe só um deles.`);
+      seen[key]=r.fileName;
+    });
+    Object.assign(data,r.data);
+  });
+  return{full:fulls.length>0,data};
+}
+// Older metrics.json files carried dividends per ticker; they now live on each position's divByYear.
+function mergeLegacyIncome(positions,legacyIncome){
+  return positions.map(p=>{
+    if(p.divByYear)return p;
+    const byYear=incomeByYear(legacyIncome,p.t);
+    if(!byYear)return p;
+    const filtered=Object.fromEntries(Object.entries(byYear).filter(([,v])=>v));
+    if(!Object.keys(filtered).length)return p;
+    return{...p,divByYear:filtered,div:Object.values(filtered).reduce((s,v)=>s+v,0)};
+  });
+}
+function normalizeConfig(config){
+  const merged={...DCFG,...config};
+  ['whtByCountry','posCountry','etfTer'].forEach(k=>{
+    if(!merged[k]||Object.keys(merged[k]).length===0)merged[k]=DCFG[k];
+  });
+  return merged;
+}
+// In the installed app on iPhone/iPad a plain download is unreliable, so the
+// file goes to the share sheet ("Guardar em Ficheiros"). Elsewhere it downloads.
+// Must be called directly from a click: navigator.share needs the user gesture.
+function saveJsonFile(data,filename){
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const standalone=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;
+  const ios=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  if(standalone&&ios&&navigator.canShare&&typeof File==='function'){
+    const file=new File([blob],filename,{type:'application/json'});
+    if(navigator.canShare({files:[file]})){
+      return navigator.share({files:[file],title:filename}).then(()=>'shared',error=>{
+        if(error&&error.name==='AbortError')return'cancelled';
+        downloadBlob(blob,filename);return'downloaded';
+      });
+    }
+  }
+  downloadBlob(blob,filename);
+  return Promise.resolve('downloaded');
+}
+function openFilesPicker(accept,cb){
+  const inp=document.createElement('input');inp.type='file';inp.accept=accept;inp.multiple=true;
+  inp.onchange=e=>{const files=[...e.target.files];if(files.length)cb(files);};inp.click();
+}
+
+// ── Live prices and exchange rates ──────────────────────────────────────────
+// EUR reference rates published by the European Central Bank (via Frankfurter:
+// free, no key, allows browser requests).
+const ECB_FX_URLS=['https://api.frankfurter.dev/v1/latest?base=EUR','https://api.frankfurter.app/latest?from=EUR'];
+async function fetchEcbRates(){
+  let lastError=null;
+  for(const url of ECB_FX_URLS){
+    try{
+      const res=await fetch(url);
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      const json=await res.json();
+      if(!json||!json.rates||!Number.isFinite(json.rates.USD)||!/^\d{4}-\d{2}-\d{2}$/.test(json.date||''))throw new Error('resposta inesperada');
+      return{date:json.date,rates:{...json.rates,EUR:1}};
+    }catch(error){lastError=error;}
+  }
+  throw new Error('Não foi possível obter as taxas do BCE ('+(lastError?.message||'sem rede')+').');
+}
+// Exchanges, keyed by the Yahoo-style suffix used in tickers (NN.AS, COR.LS, ...).
+// mic = ISO market code (Twelve Data), av = Alpha Vantage suffix.
+// (EODHD was tried and left out: it does not allow requests from a browser.)
+const PRICE_EXCHANGES={
+  US:{name:'EUA',currency:'USD',mic:null,av:''},
+  L: {name:'Londres',currency:'GBp',mic:'XLON',av:'.LON'},
+  AS:{name:'Amesterdão',currency:'EUR',mic:'XAMS',av:'.AMS'},
+  LS:{name:'Lisboa',currency:'EUR',mic:'XLIS',av:'.LIS'},
+  MI:{name:'Milão',currency:'EUR',mic:'XMIL',av:'.MIL'},
+  DE:{name:'Xetra',currency:'EUR',mic:'XETR',av:'.DEX'},
+  F: {name:'Frankfurt',currency:'EUR',mic:'XFRA',av:'.FRK'},
+  BE:{name:'Berlim',currency:'EUR',mic:'XBER',av:'.BER'},
+  PA:{name:'Paris',currency:'EUR',mic:'XPAR',av:'.PAR'},
+  MC:{name:'Madrid',currency:'EUR',mic:'XMAD',av:'.MAD'},
+  CO:{name:'Copenhaga',currency:'DKK',mic:'XCSE',av:'.CPH'},
+};
+// Symbol used to ask for a price. Tickers without suffix are US listings, except
+// non-USD British positions (e.g. LGEN), which trade in London.
+function defaultPriceSymbol(position){
+  const m=/\.([A-Z]{1,2})$/.exec(position.t);
+  if(m&&PRICE_EXCHANGES[m[1]])return position.t;
+  if(position.cat!=='USD'&&position.country==='🇬🇧')return position.t+'.L';
+  return position.t;
+}
+function parsePriceSymbol(symbol){
+  const m=/^(.+)\.([A-Z]{1,2})$/.exec(symbol.trim());
+  if(m&&PRICE_EXCHANGES[m[2]])return{base:m[1],code:m[2],exchange:PRICE_EXCHANGES[m[2]]};
+  return{base:symbol.trim(),code:'US',exchange:PRICE_EXCHANGES.US};
+}
+function positionCurrency(position){return position.cat==='USD'?'USD':'EUR';}
+// Converts a price between currencies with EUR-based rates. Pence (GBp/GBX) become pounds first.
+function convertPrice(price,from,to,rates){
+  let amount=price,currency=String(from||'').trim();
+  if(/^(GBp|GBX|GBx)$/.test(currency)){amount=amount/100;currency='GBP';}
+  currency=currency.toUpperCase();
+  if(currency===to)return amount;
+  const rate=code=>{
+    if(code==='EUR')return 1;
+    if(!rates||!Number.isFinite(rates[code]))throw new Error(`Sem taxa de câmbio para ${code}.`);
+    return rates[code];
+  };
+  return amount/rate(currency)*rate(to);
+}
+const enc=encodeURIComponent;
+const PRICE_PROVIDERS={
+  twelvedata:{
+    name:'Twelve Data',site:'twelvedata.com',delayMs:8000,dailyLimit:800,
+    note:'Grátis: 8 pedidos/minuto, 800/dia, só bolsas dos EUA (bolsas europeias exigem plano pago). Devolve a moeda de cada cotação.',
+    url:(s,key)=>`https://api.twelvedata.com/quote?symbol=${enc(s.base)}${s.exchange.mic?'&mic_code='+s.exchange.mic:''}&apikey=${enc(key)}`,
+    parse:json=>{
+      if(json.status==='error'||json.code){
+        const m=json.message||'erro do fornecedor';
+        throw new Error(/plan|upgrad/i.test(m)?'Só disponível em plano pago deste fornecedor.':m);
+      }
+      return{price:parseFloat(json.close),date:String(json.datetime||'').slice(0,10),currency:json.currency||null};
+    },
+  },
+  alphavantage:{
+    name:'Alpha Vantage',site:'alphavantage.co',delayMs:12500,dailyLimit:25,
+    note:'Grátis: 5 pedidos/minuto, 25/dia (~12 s por ticker). Cobre EUA, Londres (.L), Xetra (.DE), Frankfurt (.F), Amesterdão (.AS) e Lisboa (.LS); Paris, Milão e Madrid não.',
+    exchanges:['US','L','DE','F','AS','LS'],
+    url:(s,key)=>`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${enc(s.base+s.exchange.av)}&apikey=${enc(key)}`,
+    parse:json=>{
+      const info=json.Note||json.Information;
+      if(info){
+        if(/premium/i.test(info))throw new Error('Só disponível em plano pago deste fornecedor.');
+        if(/rate limit|requests per|per day|per minute/i.test(info))throw new Error(RATE_LIMIT_MESSAGE);
+        throw new Error(String(info).slice(0,100));
+      }
+      if(json['Error Message'])throw new Error('Símbolo não encontrado.');
+      const q=json['Global Quote'];
+      if(!q||!q['05. price'])throw new Error('Símbolo não encontrado.');
+      return{price:parseFloat(q['05. price']),date:q['07. latest trading day']||'',currency:null};
+    },
+  },
+  finnhub:{
+    name:'Finnhub',site:'finnhub.io',delayMs:1100,dailyLimit:null,
+    note:'Grátis: 60 pedidos/minuto, mas só bolsas dos EUA no plano grátis.',
+    url:(s,key)=>`https://finnhub.io/api/v1/quote?symbol=${enc(s.code==='US'?s.base:s.base+'.'+s.code)}&token=${enc(key)}`,
+    parse:json=>{
+      if(json.error)throw new Error(json.error);
+      if(!Number.isFinite(json.c)||json.c<=0)throw new Error('Símbolo não encontrado ou sem acesso.');
+      return{price:json.c,date:Number.isFinite(json.t)&&json.t>0?new Date(json.t*1000).toISOString().slice(0,10):'',currency:null};
+    },
+  },
+};
+function providerCovers(providerId,symbol){
+  const list=PRICE_PROVIDERS[providerId].exchanges;
+  return !list||list.includes(parsePriceSymbol(symbol).code);
+}
+// A price counts as live when it came from an online provider and is at most
+// LIVE_PRICE_MAX_DAYS old (covers weekends and holidays). Anything else is flagged.
+const LIVE_PRICE_MAX_DAYS=4;
+function priceFreshness(position){
+  const online=Object.values(PRICE_PROVIDERS).some(p=>p.name===position.cvSource);
+  const asOf=/^\d{4}-\d{2}-\d{2}$/.test(position.cvAsOf||'')?position.cvAsOf:null;
+  const age=asOf?Math.floor((Date.now()-new Date(asOf+'T00:00:00Z').getTime())/86400000):null;
+  if(online&&age!==null&&age<=LIVE_PRICE_MAX_DAYS)return{live:true,title:`Cotação online (${position.cvSource}) de ${asOf}`};
+  const source=online?position.cvSource:position.cvSource==='manual'?'introduzido à mão':position.cvSource==='csv'?'CSV do broker':'origem desconhecida';
+  const when=asOf?`de ${asOf}${age!==null?` (${age} dia${age===1?'':'s'})`:''}`:'sem data';
+  return{live:false,title:`Preço não live: ${source}, ${when}.`};
+}
+// Amber dot next to a price that is not live.
+function StaleDot({p}){
+  const f=priceFreshness(p);
+  if(f.live)return null;
+  return h('span',{title:f.title,'aria-label':f.title,style:{color:'var(--gold)',marginLeft:4,cursor:'help',fontSize:10}},'●');
+}
+// The API key is kept only in this browser: never in the data file, the config or the code.
+const PRICE_KEY_PREFIX='if_pricekey_';
+function readPriceKey(provider){try{return localStorage.getItem(PRICE_KEY_PREFIX+provider)||'';}catch(e){return'';}}
+function writePriceKey(provider,key){
+  try{if(key)localStorage.setItem(PRICE_KEY_PREFIX+provider,key);else localStorage.removeItem(PRICE_KEY_PREFIX+provider);}
+  catch(e){console.error('save price key failed',e);}
+}
+const RATE_LIMIT_MESSAGE='Limite de pedidos atingido.';
+// Providers sometimes echo the API key in their messages; never show it.
+function maskKey(message,key){return key&&key.length>3?String(message).split(key).join('•••'):String(message);}
+async function fetchQuote(providerId,symbol,key){
+  try{return await fetchQuoteRaw(providerId,symbol,key);}
+  catch(error){throw new Error(maskKey(error.message,key));}
+}
+async function fetchQuoteRaw(providerId,symbol,key){
+  const provider=PRICE_PROVIDERS[providerId];
+  const s=parsePriceSymbol(symbol);
+  let res;
+  try{res=await fetch(provider.url(s,key));}
+  catch(e){throw new Error('Pedido bloqueado pelo browser ou sem rede.');}
+  let json=null;
+  try{json=await res.json();}catch(e){if(res.ok)throw new Error('Resposta inválida do fornecedor.');}
+  if(!res.ok){
+    const detail=json&&(json.message||json.error||json.Information||json.Note);
+    // Providers answer tickers outside the free plan with 403/404 plus an explanation.
+    if(detail&&/plan|upgrad|subscri|premium|access/i.test(detail))throw new Error('Só disponível em plano pago deste fornecedor.');
+    if(res.status===401||res.status===403)throw new Error('Sem acesso: chave inválida ou ticker fora do plano.');
+    if(res.status===404)throw new Error(detail?'Não encontrado: '+String(detail).slice(0,80):'Símbolo não encontrado.');
+    if(res.status===429)throw new Error(RATE_LIMIT_MESSAGE);
+    throw new Error('Erro HTTP '+res.status+(detail?': '+String(detail).slice(0,80):'.'));
+  }
+  const quote=provider.parse(json||{});
+  if(!Number.isFinite(quote.price)||quote.price<=0)throw new Error('Preço inválido.');
+  return{...quote,currency:quote.currency||s.exchange.currency};
 }
 
 // ── Certificados de Aforro: maturidade (anos após a constituição) por série ──
@@ -3569,8 +3937,8 @@ function App(){
     const handler=e=>{
       const quotaExceeded=!!(e.detail&&e.detail.quotaExceeded);
       setToast(quotaExceeded
-        ?'Storage quota exceeded — export your JSONs in Config to avoid losing data!'
-        :'Não foi possível guardar os dados no navegador. Exporta os JSONs em Config e verifica o espaço disponível.');
+        ?'Espaço do browser esgotado — exporta o income-factory.json em Config para não perder dados!'
+        :'Não foi possível guardar os dados no navegador. Exporta o income-factory.json em Config e verifica o espaço disponível.');
       setTimeout(()=>setToast(''),7000);
     };
     window.addEventListener('storage-write-failed',handler);
@@ -3581,7 +3949,7 @@ function App(){
     _autoSaveRevision.current++;
     _autoSaveSuspended.current=true;
     try{
-      removeStorageBatch(['if_fp','if_fq','if_fc','if_fi','if_fs','if_ft','if_fw','if_vh']);
+      removeStorageBatch(['if_fp','if_fq','if_fc','if_fi','if_fs','if_ft','if_fw','if_vh',...Object.keys(PRICE_PROVIDERS).map(id=>PRICE_KEY_PREFIX+id)]);
     }catch(e){
       _autoSaveSuspended.current=false;
       console.error('reset storage failed',e);
@@ -3592,7 +3960,7 @@ function App(){
     // Reset all state — show the noData welcome screen
     setPos(null);setQual(null);setCfg(DCFG);setSold([]);setWealth(null);setTeses(null);
     setDirty(false);setTab('dashboard');setNoData(true);
-    setToast('Dados apagados — importa os teus JSONs para continuar');
+    setToast('Dados apagados — importa o teu income-factory.json para continuar');
     setTimeout(()=>setToast(''),4000);
   },[]);
 
@@ -3610,227 +3978,81 @@ function App(){
       writeStorageBatch(entries);
       _autoSaveSuspended.current=false;
       setDirty(false);
-      setToast('Guardado  —  exporta os JSONs no Config para persistir entre sessões');
+      setToast('Guardado — exporta o income-factory.json em Config para ter uma cópia fora do browser');
       setTimeout(()=>setToast(''),4000);
     }catch(e){
       _autoSaveSuspended.current=false;
       console.error('manual save failed',e);
-      setToast('Não foi possível guardar todos os dados. Exporta os JSONs em Config para criar uma cópia de segurança.');
+      setToast('Não foi possível guardar todos os dados. Exporta o income-factory.json em Config para criar uma cópia de segurança.');
       setTimeout(()=>setToast(''),7000);
     }
   },[pos,qual,cfg,sold,wealth,teses]);
 
-  // ── Per-JSON import handlers ─────────────────────────────────────────────
-  const importPortfolioJSON=useCallback(()=>{
-    openFilePicker('.json',async file=>{
-      try{
-        const data=requireJsonRecord(JSON.parse(await file.text()),'portfolio.json');
-        if(data.positions!==undefined)validateImportedPositions(data.positions,'positions');
-        if(data.sold!==undefined)validateImportedPositions(data.sold,'sold');
-        if(data.positions===undefined&&data.sold===undefined)throw new Error('Faltam as listas positions/sold.');
-        if(data.positions){
-          const allPos=data.positions.map(({dv,...r})=>r);
-          // New unified format: split by status='sold' or n===0
-          const hasNewFormat=allPos.some(p=>p.status==='sold'||p.transactions);
-          if(hasNewFormat){
-            const active=allPos.filter(p=>p.status!=='sold'&&(p.n==null||p.n>0));
-            const closed=allPos.filter(p=>p.status==='sold'||p.n===0);
-            const soldBuilt=closed.map(p=>{
-              const fi=fifoEngine(p.transactions||[]);
-              const lastSell=fi.sells.length?fi.sells[fi.sells.length-1]:null;
-              const entry=p.transactions?.find(t=>t.type==='buy')?.date||'';
-              const exit=lastSell?.date||'';
-              const totalBought=p.transactions?.filter(t=>t.type==='buy').reduce((s,t)=>s+t.n,0)||0;
-              return{
-                t:p.t,cat:p.cat,sec:p.sec||'',name:p.name||p.t,country:p.country||'',
-                n:totalBought,sv:lastSell?.price||p.sv||0,
-                div:p.div||0,divByYear:p.divByYear||{},
-                entry,exit,note:p.note||'',transactions:p.transactions||[],
-              };
-            });
-            // Also merge any explicit sold[] array from the JSON (e.g. positions closed outside the positions array)
-            const explicitSold=(data.sold||[]).filter(s=>!soldBuilt.find(x=>x.t===s.t));
-            const allSold=[...soldBuilt,...explicitSold];
-            writeImportedBatch([['if_fp',JSON.stringify(active)],['if_fs',JSON.stringify(allSold)]]);
-            setPos(active);setSold(allSold);
-          } else {
-            const importedSold=data.sold||[];
-            writeImportedBatch([['if_fp',JSON.stringify(allPos)],['if_fs',JSON.stringify(importedSold)]]);
-            setPos(allPos);setSold(importedSold);
-          }
-          _autoSaveSuspended.current=false;
-          setNoData(false);
-          setToast('portfolio.json importado — '+(data.positions.filter(p=>p.status!=='sold'&&(p.n==null||p.n>0)).length)+' activas · '+(data.positions.filter(p=>p.status==='sold'||p.n===0).length)+' fechadas');
-          setTimeout(()=>setToast(''),3000);
-        } else if(data.sold){
-          writeImportedBatch([['if_fs',JSON.stringify(data.sold)]]);
-          _autoSaveSuspended.current=false;
-          setSold(data.sold);
-          setToast('portfolio.json importado');setTimeout(()=>setToast(''),2500);
-        }
-      }catch(err){setToast('Erro: '+err.message);setTimeout(()=>setToast(''),3000);}
-    });
-  },[]);
-
-  const importMetricsJSON=useCallback(()=>{
-    openFilePicker('.json',async file=>{
-      try{
-        const data=requireJsonRecord(JSON.parse(await file.text()),'metrics.json');
-        if(data.quality!==undefined)validateImportedQuality(data.quality);
-        if(data.income!==undefined)validateImportedIncome(data.income);
-        if(data.quality===undefined&&data.income===undefined)throw new Error('Falta quality ou income.');
-        const importedQuality=data.quality?.map(q=>{const clean=cleanQuality(q);return{...clean,sc:calcScore(clean)};});
-        // Legacy support: older metrics.json files carried a separate income{}
-        // object. Dividend history now lives on each position's own divByYear
-        // (single source of truth, matching how closed positions already
-        // worked) — merge it in instead of storing it separately. No-ops for
-        // positions that already carry their own divByYear.
-        if(data.income){
-          const legacyIncome=normalizeIncomeKeys(data.income);
-          const currentPos=(await dbg('fp'))||[];
-          const mergedPos=currentPos.map(p=>{
-            if(p.divByYear)return p;
-            const byYear=incomeByYear(legacyIncome,p.t);
-            if(!byYear)return p;
-            const filtered=Object.fromEntries(Object.entries(byYear).filter(([,v])=>v));
-            if(!Object.keys(filtered).length)return p;
-            return{...p,divByYear:filtered,div:Object.values(filtered).reduce((s,v)=>s+v,0)};
-          });
-          const entries=[['if_fp',JSON.stringify(mergedPos)]];
-          if(importedQuality)entries.push(['if_fq',JSON.stringify(importedQuality)]);
-          writeImportedBatch(entries);
-          setPos(mergedPos);
-        }else if(importedQuality){
-          writeImportedBatch([['if_fq',JSON.stringify(importedQuality)]]);
-        }
-        _autoSaveSuspended.current=false;
-        if(importedQuality)setQual(importedQuality);
-        setToast('metrics.json importado');setTimeout(()=>setToast(''),2500);
-      }catch(error){console.error('metrics import failed',error);setToast('Erro ao importar metrics.json: '+error.message);setTimeout(()=>setToast(''),4000);}
-    });
-  },[]);
-
-  const importConfigJSON=useCallback(()=>{
-    openFilePicker('.json',async file=>{
-      try{
-        const data=validateImportedConfig(JSON.parse(await file.text()));
-        const merged={...DCFG,...data};
-        ['whtByCountry','posCountry','etfTer'].forEach(k=>{
-          if(!merged[k]||Object.keys(merged[k]).length===0){merged[k]=DCFG[k];}
-        });
-        writeImportedBatch([['if_fc',JSON.stringify(merged)]]);
-        _autoSaveSuspended.current=false;
-        setCfg(merged);
-        setToast('config.json importado');setTimeout(()=>setToast(''),2500);
-      }catch(error){console.error('config import failed',error);setToast('Erro ao importar config.json: '+error.message);setTimeout(()=>setToast(''),4000);}
-    });
-  },[]);
-
-  // ── Per-JSON export handlers ─────────────────────────────────────────────
-  const tod=useMemo(()=>new Date().toISOString().slice(0,10),[]);
-  const exportPortfolioJSON=useCallback(()=>{
-    // Export unified format: all positions in one array, closed ones have status:'sold'
-    const activePos=(pos||[]).map(p=>({...p}));
-    const closedPos=(sold||[]).map(p=>({
-      ...p,status:'sold',n:0,
-      // keep transactions if present, otherwise reconstruct minimal buy+sell
-      transactions:p.transactions||[
-        ...(p.n&&p.av?[{date:p.entry||'',type:'buy',n:p.n,price:p.av}]:[]),
-        ...(p.sv?[{date:p.exit||'',type:'sell',n:p.n,price:p.sv}]:[]),
-      ],
-    }));
-    const allPositions=[...activePos,...closedPos];
-    dlJSON({version:2,exportedAt:new Date().toISOString(),positions:allPositions},'portfolio_'+tod+'.json');
-    setToast('portfolio.json exportado (formato unificado)');setTimeout(()=>setToast(''),2500);
-  },[pos,sold]);
-  const exportMetricsJSON=useCallback(()=>{
-    dlJSON({version:1,exportedAt:new Date().toISOString(),quality:(qual||[]).map(cleanQuality)},'metrics_'+tod+'.json');
-    setToast('metrics.json exportado');setTimeout(()=>setToast(''),2000);
-  },[qual]);
-  const importWealthJSON=useCallback(()=>{
-    openFilePicker('.json',async file=>{
-      try{
-        const data=validateImportedWealth(JSON.parse(await file.text()));
-        writeImportedBatch([['if_fw',JSON.stringify(data)]]);
-        _autoSaveSuspended.current=false;
-        setWealth(data);
-        setToast('wealth.json importado');setTimeout(()=>setToast(''),2500);
-      }catch(e){setToast('Erro ao importar wealth.json: '+e.message);setTimeout(()=>setToast(''),3500);}
-    });
-  },[]);
-  const exportWealthJSON=useCallback(()=>{
-    dlJSON({version:1,exportedAt:new Date().toISOString(),...(wealth||{ppr:[],aforro:[]})},'wealth_'+tod+'.json');
-    setToast('wealth.json exportado');setTimeout(()=>setToast(''),2000);
-  },[wealth]);
-  const importTesesJSON=useCallback(()=>{
-    openFilePicker('.json',async file=>{
-      try{
-        const data=validateImportedTheses(JSON.parse(await file.text()));
-        writeImportedBatch([['if_ft',JSON.stringify(data)]]);
-        _autoSaveSuspended.current=false;
-        setTeses(data);
-        setToast('teses.json importado');setTimeout(()=>setToast(''),2500);
-      }catch(e){setToast('Erro ao importar teses.json: '+e.message);setTimeout(()=>setToast(''),3500);}
-    });
-  },[]);
-  const exportTesesJSON=useCallback(()=>{
-    dlJSON({version:1,exportedAt:new Date().toISOString(),...(teses||{})},'teses_'+tod+'.json');
-    setToast('teses.json exportado');setTimeout(()=>setToast(''),2000);
-  },[teses]);
-  const exportConfigJSON=useCallback(()=>{
-    dlJSON({version:1,exportedAt:new Date().toISOString(),...(cfg||DCFG)},'config_'+tod+'.json');
-    setToast('config.json exportado');setTimeout(()=>setToast(''),2000);
-  },[cfg]);
-  const exportFullBackup=useCallback(()=>{
+  // ── Data file import / export (income-factory.json) ──────────────────────
+  const readValuations=()=>{
+    const raw=localStorage.getItem('if_vh');
+    return validateValuationHistory(raw===null?[]:JSON.parse(raw));
+  };
+  const exportData=useCallback(()=>{
+    const done=message=>{setToast(message);setTimeout(()=>setToast(''),5000);};
     try{
-      const rawHistory=localStorage.getItem('if_vh');
-      const valuationHistory=validateValuationHistory(rawHistory===null?[]:JSON.parse(rawHistory));
-      downloadBlob(new Blob([JSON.stringify({
-        type:'income-factory-full-backup',version:1,exportedAt:new Date().toISOString(),
-        positions:pos||[],sold:sold||[],quality:(qual||[]).map(cleanQuality),
-        config:cfg||DCFG,wealth,teses,valuationHistory
-      },null,2)],{type:'application/json'}),'income-factory-backup_'+tod+'.json');
-      setToast('Backup completo exportado — inclui posições, métricas, configuração, património, teses e histórico.');
+      const filename='income-factory_'+new Date().toISOString().slice(0,10)+'.json';
+      const priceKeys=cfg?.exportPriceKeys?Object.fromEntries(Object.keys(PRICE_PROVIDERS).map(id=>[id,readPriceKey(id)])):null;
+      saveJsonFile(buildDataFile({pos,sold,qual,cfg,wealth,teses,valuations:readValuations(),priceKeys}),filename).then(result=>{
+        if(result==='cancelled')done('Exportação cancelada.');
+        else done(filename+' '+(result==='shared'?'partilhado':'exportado')+'. Guarda este ficheiro fora do browser'+(priceKeys&&Object.values(priceKeys).some(Boolean)?' e não o partilhes: inclui as tuas chaves API.':'.'));
+      });
     }catch(error){
-      console.error('full backup export failed',error);
-      setToast('Não foi possível exportar o backup completo: '+error.message);
+      console.error('data export failed',error);
+      done('Não foi possível exportar os dados: '+error.message);
     }
-    setTimeout(()=>setToast(''),5000);
   },[pos,sold,qual,cfg,wealth,teses]);
-  const importFullBackup=useCallback(()=>{
-    openFilePicker('.json',async file=>{
+  const importData=useCallback(()=>{
+    openFilesPicker('.json,application/json',async files=>{
       try{
-        const backup=requireJsonRecord(JSON.parse(await file.text()),'backup completo');
-        if(backup.type!=='income-factory-full-backup'||backup.version!==1)throw new Error('Tipo ou versão de backup não suportados.');
-        const positions=validateImportedPositions(backup.positions,'positions');
-        const closed=validateImportedPositions(backup.sold,'sold');
-        const quality=validateImportedQuality(backup.quality);
-        const config=validateImportedConfig(backup.config);
-        const backupWealth=backup.wealth===null?null:validateImportedWealth(backup.wealth);
-        const theses=backup.teses===null?null:validateImportedTheses(backup.teses);
-        const valuationHistory=validateValuationHistory(backup.valuationHistory);
-        const normalizedConfig={...DCFG,...config};
-        ['whtByCountry','posCountry','etfTer'].forEach(key=>{
-          if(!normalizedConfig[key]||Object.keys(normalizedConfig[key]).length===0)normalizedConfig[key]=DCFG[key];
-        });
-        const normalizedQuality=quality.map(item=>{const clean=cleanQuality(item);return{...clean,sc:calcScore(clean)};});
-        writeImportedBatch([
-          ['if_fp',JSON.stringify(positions)],['if_fs',JSON.stringify(closed)],
-          ['if_fq',JSON.stringify(normalizedQuality)],['if_fc',JSON.stringify(normalizedConfig)],
-          ['if_fw',JSON.stringify(backupWealth)],['if_ft',JSON.stringify(theses)],
-          ['if_vh',JSON.stringify(valuationHistory)]
-        ],['if_fi']);
-        _autoSaveSuspended.current=false;
-        setPos(positions);setSold(closed);setQual(normalizedQuality);setCfg(normalizedConfig);
-        setWealth(backupWealth);setTeses(theses);setNoData(false);
-        setToast('Backup completo validado e restaurado.');
+        const results=[];
+        for(const file of files){
+          let json;
+          try{json=JSON.parse(await file.text());}catch(e){throw new Error(`${file.name} não é JSON válido.`);}
+          results.push(readDataFile(json,file.name));
+        }
+        const{full,data}=combineDataFiles(results);
+        const d=full?{...emptyDataset(),...data}:data;
+        const entries=[];
+        let positions=d.positions;
+        if(d.legacyIncome){
+          positions=mergeLegacyIncome(positions!==undefined?positions:(pos||[]),d.legacyIncome);
+        }
+        const quality=d.quality&&d.quality.map(item=>{const clean=cleanQuality(item);return{...clean,sc:calcScore(clean)};});
+        const config=d.config&&normalizeConfig(d.config);
+        if(positions!==undefined)entries.push(['if_fp',JSON.stringify(positions)]);
+        if(d.sold!==undefined)entries.push(['if_fs',JSON.stringify(d.sold)]);
+        if(quality)entries.push(['if_fq',JSON.stringify(quality)]);
+        if(config)entries.push(['if_fc',JSON.stringify(config)]);
+        if(d.wealth!==undefined)entries.push(['if_fw',JSON.stringify(d.wealth)]);
+        if(d.theses!==undefined)entries.push(['if_ft',JSON.stringify(d.theses)]);
+        if(d.valuations!==undefined)entries.push(['if_vh',JSON.stringify(d.valuations)]);
+        if(!entries.length)throw new Error('Nenhum dado encontrado.');
+        writeImportedBatch(entries,full?['if_fi']:[]);
+        const restoredKeys=d.priceKeys?Object.entries(d.priceKeys):[];
+        restoredKeys.forEach(([id,key])=>writePriceKey(id,key));
+        if(restoredKeys.length)window.dispatchEvent(new Event('price-keys-changed'));
+        if(positions!==undefined)setPos(positions);
+        if(d.sold!==undefined)setSold(d.sold);
+        if(quality)setQual(quality);
+        if(config)setCfg(config);
+        if(d.wealth!==undefined)setWealth(d.wealth);
+        if(d.theses!==undefined)setTeses(d.theses);
+        setNoData(false);
+        const nActive=(positions||pos||[]).length,nSold=(d.sold||sold||[]).length;
+        setToast((full?'Dados importados':'Ficheiros antigos importados')+` — ${nActive} activas · ${nSold} fechadas.`+(restoredKeys.length?` ${restoredKeys.length} chave${restoredKeys.length===1?'':'s'} API restaurada${restoredKeys.length===1?'':'s'}.`:'')+(full?'':' Exporta agora para criar o teu income-factory.json.'));
       }catch(error){
-        console.error('full backup restore failed',error);
-        setToast('Backup não restaurado: '+error.message);
+        console.error('data import failed',error);
+        setToast('Dados não importados: '+error.message);
       }
-      setTimeout(()=>setToast(''),5000);
+      setTimeout(()=>setToast(''),6000);
     });
-  },[]);
+  },[pos,sold]);
   const importBrokerQuotes=useCallback(()=>{
     openFilePicker('.csv,text/csv',async file=>{
       try{
@@ -3839,7 +4061,7 @@ function App(){
         const quoteByTicker=new Map(result.quotes.map(quote=>[quote.ticker,quote]));
         const nextPositions=(pos||[]).map(position=>{
           const quote=quoteByTicker.get(position.t);
-          return quote?{...position,cv:quote.price,cvAsOf:quote.date}:position;
+          return quote?{...position,cv:quote.price,cvAsOf:quote.date,cvSource:'csv'}:position;
         });
         const nextConfig={...(cfg||DCFG)};
         if(result.fxRate!==null){nextConfig.fxEurUsd=result.fxRate;nextConfig.fxEurUsdAsOf=result.fxDate;}
@@ -4245,27 +4467,21 @@ function App(){
         h('div',{style:{fontSize:40,marginBottom:12}},'◈'),
         h('h2',{className:'text-[18px] font-bold text-slate-200 mb-2'},'income factory'),
         h('p',{className:'font-mono text-xs text-[var(--muted)]'},
-          'Sem dados encontrados. Importa os teus ficheiros JSON ou começa do zero.')
+          'Sem dados encontrados. Importa o teu ficheiro income-factory.json ou começa do zero.')
       ),
       h('div',{style:{display:'flex',flexDirection:'column',gap:10}},
-        [
-          {label:'portfolio.json',desc:'Posições activas + vendidas + dividendos por ano',fn:importPortfolioJSON},
-          {label:'metrics.json',desc:'Quality scores fundamentais',fn:importMetricsJSON},
-          {label:'config.json',desc:'Thresholds de scoring + mapeamentos',fn:importConfigJSON},
-          {label:'wealth.json',desc:'PPR + Certificados de Aforro + Depósitos',fn:importWealthJSON},
-        ].map(({label,desc,fn:onImport})=>
-          h('div',{key:label,className:'card-sm'},
-            h('div',{style:{fontSize:12,fontWeight:700,color:'var(--gold)',marginBottom:4}},label),
-            h('div',{style:{fontSize:10,color:'var(--muted)',marginBottom:10}},desc),
-            h('button',{className:'btn-primary ml-0',onClick:onImport},'Importar')
-          )
+        h('div',{className:'card-sm',style:{textAlign:'center'}},
+          h('div',{style:{fontSize:12,fontWeight:700,color:'var(--gold)',marginBottom:4}},'income-factory.json'),
+          h('div',{style:{fontSize:10,color:'var(--muted)',marginBottom:12,lineHeight:1.5}},
+            'Um só ficheiro com posições, métricas, configuração, património, teses e histórico. Também aceita os ficheiros antigos (portfolio, metrics, config, wealth, teses): selecciona-os todos de uma vez.'),
+          h('button',{className:'btn-primary ml-0',onClick:importData},'Importar dados')
         ),
         h('div',{style:{textAlign:'center',paddingTop:8}},
           h('button',{
             onClick:()=>{_autoSaveSuspended.current=false;_loaded.current=true;setPos([]);setQual([]);setSold([]);setWealth(null);setTeses(null);setCfg(DCFG);setNoData(false);},
             style:{background:'transparent',border:'none',color:'var(--muted)',fontSize:12,cursor:'pointer',textDecoration:'underline'}
           },'Continuar sem dados (portfolio vazio)'),
-          h('div',{style:{fontSize:10,color:'var(--muted)',marginTop:12,fontFamily:'IBM Plex Mono,monospace'}},'Última release: '+(window.APP_RELEASE||'').split('-').reverse().join('/'))
+          h('div',{style:{fontSize:10,color:'var(--muted)',marginTop:12,fontFamily:'IBM Plex Mono,monospace'}},'Última release: '+(([d,n])=>d.split('-').reverse().join('/')+(n?' · #'+n:''))((window.APP_RELEASE||'').split('.')))
         )
       ),
       toast&&h('div',{className:'toast'},toast)
@@ -4292,8 +4508,8 @@ function App(){
     h('div',{className:'page'},
       tab==='dashboard'&&h(Dash,{pos:safePos,qual:safeQual,income:safeInc,sold:safeSold,cfg,setCfg,wealth}),
       tab==='portfolio'&&h(Port,{pos:safePos,setPos,income:safeInc,qual:safeQual,setQual,cfg,sold:safeSold,setSold}),
-      tab==='transactions'&&h(TransactionsPage,{cfg,pos:safePos,setPos,sold:safeSold,setSold,income:safeInc,qual:safeQual,setQual,exportPortfolioJSON}),
-      tab==='config'&&h(Conf,{cfg,setCfg,pos:safePos,setPos,sold:safeSold,setSold,income:safeInc,qual:safeQual,setQual,onReset:handleReset,exportCSV,importPortfolioJSON,importMetricsJSON,importConfigJSON,importWealthJSON,importTesesJSON,exportPortfolioJSON,exportMetricsJSON,exportConfigJSON,exportWealthJSON,exportTesesJSON,exportFullBackup,importFullBackup,importBrokerQuotes,exportBrokerQuoteTemplate}),
+      tab==='transactions'&&h(TransactionsPage,{cfg,pos:safePos,setPos,sold:safeSold,setSold,income:safeInc,qual:safeQual,setQual}),
+      tab==='config'&&h(Conf,{cfg,setCfg,pos:safePos,setPos,sold:safeSold,setSold,income:safeInc,qual:safeQual,setQual,onReset:handleReset,exportCSV,importData,exportData,importBrokerQuotes,exportBrokerQuoteTemplate}),
       tab==='dividendos'&&h(DividendosPage,{pos:safePos,income:safeInc,qual:safeQual,sold:safeSold,cfg}),
       tab==='analytics'&&h(AnalyticsPage,{pos:safePos,qual:safeQual,income:safeInc,sold:safeSold,cfg,wealth}),
       tab==='teses'&&h(TesesPage,{pos:safePos,teses,qual:safeQual}),
@@ -5362,6 +5578,15 @@ function Port({pos,setPos,income,qual,setQual,cfg,sold,setSold}){
           );
         })()
       ),
+      (()=>{
+        const stale=(pos||[]).filter(p=>(p.n==null||p.n>0)&&!priceFreshness(p).live);
+        if(!stale.length)return null;
+        return h('div',{style:{fontSize:11,color:'var(--muted)',marginBottom:10,lineHeight:1.5}},
+          h('span',{style:{color:'var(--gold)'}},'● '),
+          `${stale.length} de ${(pos||[]).filter(p=>p.n==null||p.n>0).length} preços não são live (introduzidos à mão, CSV ou com mais de ${LIVE_PRICE_MAX_DAYS} dias): `,
+          h('span',{style:{color:'var(--text)'}},stale.map(p=>p.t).join(', ')),
+          '. Actualiza em Config → Cotações online.');
+      })(),
       h('div',{className:'flex gap-2 mb-3.5 flex-wrap items-center'},
         ['TODAS','USD','EUR','ETF'].map(f=>h('button',{key:f,className:'fb'+(flt===f?' on':''),onClick:()=>setFlt(f)},f==='TODAS'?'Todas':f)),
       ),
@@ -5393,7 +5618,7 @@ function Port({pos,setPos,income,qual,setQual,cfg,sold,setSold}){
               h('td',{className:'font-mono'},h(TickerLink,{t:p.t})),
               h('td',{style:{whiteSpace:'nowrap'}},_sc!=null?_band+' '+_sc:'—'),
               h('td',{className:'mono-sm-muted'},fn(p.av)),
-              h('td',{className:'mono-sm'},fn(p.cv)),
+              h('td',{className:'mono-sm',title:priceFreshness(p).title},fn(p.cv),h(StaleDot,{p})),
               h('td',{className:'text-muted'},s+fn(c.cost)),
               h('td',null,s+fn(c.val)),
               h('td',{style:{color:c.pl>=0?'var(--green)':'var(--red)'}},( c.pl>=0?'+':'-')+s+fn(Math.abs(c.pl))),
@@ -5479,8 +5704,177 @@ function BrokerSelect({value,list,onChange,style}){
     value&&!known&&h('option',{key:'__other',value},value+' (fora da lista)')
   );
 }
-function Conf({cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onReset,exportCSV,importPortfolioJSON,importMetricsJSON,importConfigJSON,importWealthJSON,importTesesJSON,exportPortfolioJSON,exportMetricsJSON,exportConfigJSON,exportWealthJSON,exportTesesJSON,exportFullBackup,importFullBackup,importBrokerQuotes,exportBrokerQuoteTemplate}){
+// ── Cotações online: test every ticker against a provider (plus an optional fallback
+// for the tickers it can't price), then apply the ones you confirm ──
+function PricePanel({cfg,setCfg,pos,setPos}){
+  const[provider,setProvider]=useState(cfg?.priceProvider&&PRICE_PROVIDERS[cfg.priceProvider]?cfg.priceProvider:'twelvedata');
+  const[fallback,setFallback]=useState(cfg?.priceFallback===''?'':(cfg?.priceFallback&&PRICE_PROVIDERS[cfg.priceFallback]?cfg.priceFallback:'alphavantage'));
+  const[keys,setKeys]=useState(()=>Object.fromEntries(Object.keys(PRICE_PROVIDERS).map(id=>[id,readPriceKey(id)])));
+  const[rows,setRows]=useState([]);
+  const[running,setRunning]=useState(false);
+  const[message,setMessage]=useState('');
+  const cancel=useRef(false);
+  const readAllKeys=()=>Object.fromEntries(Object.keys(PRICE_PROVIDERS).map(id=>[id,readPriceKey(id)]));
+  // 1. Leaving Config stops a running test (it would keep spending the daily quota).
+  useEffect(()=>()=>{cancel.current=true;},[]);
+  // 3. Keys restored by an import while Config is open.
+  useEffect(()=>{
+    const refresh=()=>setKeys(readAllKeys());
+    window.addEventListener('price-keys-changed',refresh);
+    return()=>window.removeEventListener('price-keys-changed',refresh);
+  },[]);
+  const fb=fallback&&fallback!==provider?fallback:'';
+  const active=(pos||[]).filter(p=>(p.n==null||p.n>0)&&p.t);
+  const symbolFor=p=>(cfg?.priceSymbols&&cfg.priceSymbols[p.t])||defaultPriceSymbol(p);
+  const setKey=(id,value)=>{const v=value.trim();setKeys(k=>({...k,[id]:v}));writePriceKey(id,v);};
+  const changeProvider=id=>{setProvider(id);setRows([]);setMessage('');setCfg({...cfg,priceProvider:id});};
+  const changeFallback=id=>{setFallback(id);setRows([]);setMessage('');setCfg({...cfg,priceFallback:id});};
+  const changeSymbol=(p,value)=>{
+    const symbol=value.trim().toUpperCase();
+    const symbols={...(cfg?.priceSymbols||{})};
+    if(!symbol||symbol===defaultPriceSymbol(p))delete symbols[p.t];else symbols[p.t]=symbol;
+    setCfg({...cfg,priceSymbols:symbols});
+  };
+  const run=async()=>{
+    if(!keys[provider]){setMessage('Falta a chave da API de '+PRICE_PROVIDERS[provider].name+'.');return;}
+    cancel.current=false;setRunning(true);setMessage('A obter taxas de câmbio do BCE…');
+    const next=active.map(p=>({t:p.t,symbol:symbolFor(p),target:positionCurrency(p),current:p.cv,status:'pending'}));
+    setRows([...next]);
+    let rates=null;
+    try{rates=(await fetchEcbRates()).rates;}
+    catch(e){setMessage(e.message+' Só as cotações já na moeda da posição podem ser aplicadas.');}
+    const ask=async(i,id)=>{
+      const q=await fetchQuote(id,next[i].symbol,keys[id]);
+      const price=convertPrice(q.price,q.currency,next[i].target,rates);
+      const diff=next[i].current>0?price/next[i].current-1:null;
+      const warn=diff!==null&&Math.abs(diff)>0.25;
+      return{status:'ok',via:id,raw:q.price,rawCurrency:q.currency,price,date:q.date,diff,warn,apply:!warn,error:null};
+    };
+    // Pass 1: main provider for every ticker. Pass 2: fallback for the ones that failed and it covers.
+    const passes=[{id:provider,pick:()=>next.map((_,i)=>i)}];
+    if(fb&&keys[fb])passes.push({id:fb,pick:()=>next.map((r,i)=>i).filter(i=>next[i].status==='error'&&providerCovers(fb,next[i].symbol))});
+    for(const pass of passes){
+      const info=PRICE_PROVIDERS[pass.id];
+      const idx=pass.pick();
+      let limited=false;
+      for(let k=0;k<idx.length;k++){
+        if(cancel.current)break;
+        const i=idx[k];
+        if(limited){next[i]={...next[i],status:'error',error:info.name+': '+RATE_LIMIT_MESSAGE+' Tenta amanhã.',apply:false};continue;}
+        if(k>0)await new Promise(r=>setTimeout(r,info.delayMs));
+        if(cancel.current)break;
+        setMessage(`${info.name}: ${next[i].symbol} (${k+1}/${idx.length})…`);
+        const prevError=next[i].error;
+        next[i]={...next[i],status:'loading'};setRows([...next]);
+        if(!providerCovers(pass.id,next[i].symbol)){
+          next[i]={...next[i],status:'error',error:info.name+' não cobre esta bolsa.',apply:false};
+        }else{
+          try{next[i]={...next[i],...(await ask(i,pass.id))};}
+          catch(error){
+            next[i]={...next[i],status:'error',error:(prevError&&pass.id!==provider?prevError+' / ':'')+info.name+': '+error.message,apply:false};
+            if(error.message===RATE_LIMIT_MESSAGE)limited=true;
+          }
+        }
+        setRows([...next]);
+      }
+    }
+    if(fb&&keys[fb]&&!cancel.current){
+      next.forEach((r,i)=>{if(r.status==='error'&&!providerCovers(fb,r.symbol))next[i]={...r,error:r.error+' '+PRICE_PROVIDERS[fb].name+' não cobre esta bolsa.'};});
+      setRows([...next]);
+    }
+    const ok=next.filter(r=>r.status==='ok').length;
+    const note=fb&&!keys[fb]?' Sem chave para '+PRICE_PROVIDERS[fb].name+': fallback não usado.':'';
+    setMessage(cancel.current?'Cancelado.':`${ok} de ${next.length} tickers com cotação. Revê e aplica.`+note);
+    setRunning(false);
+  };
+  const toApply=rows.filter(r=>r.status==='ok'&&r.apply);
+  const apply=()=>{
+    const byTicker=new Map(toApply.map(r=>[r.t,r]));
+    const today=new Date().toISOString().slice(0,10);
+    setPos(prev=>prev.map(p=>{
+      const r=byTicker.get(p.t);
+      return r?{...p,cv:Math.round(r.price*10000)/10000,cvAsOf:r.date||today,cvSource:PRICE_PROVIDERS[r.via].name}:p;
+    }));
+    const sources=[...new Set(toApply.map(r=>PRICE_PROVIDERS[r.via].name))].join(' + ');
+    setCfg({...cfg,priceProvider:provider,priceFallback:fallback,quotesImportedAt:new Date().toISOString(),quotesSource:sources});
+    setMessage(`${toApply.length} cotações aplicadas.`);
+    setRows(rows.map(r=>byTicker.has(r.t)?{...r,status:'applied',apply:false}:r));
+  };
+  const fmt=(v,d=2)=>Number.isFinite(v)?v.toFixed(d):'—';
+  const cell={padding:'4px 6px',fontSize:10,borderBottom:'1px solid var(--border)',whiteSpace:'nowrap'};
+  const short={twelvedata:'TD',alphavantage:'AV',finnhub:'FH'};
+  const providerRow=(label,id,onChange,options)=>h('div',{style:{marginBottom:6}},
+    h('div',{style:{fontSize:9,color:'var(--muted)',marginBottom:3}},label),
+    h('div',{className:'flex gap-1.5'},
+      h('select',{className:'ed',style:{flex:1,fontSize:11},value:id,disabled:running,onChange:e=>onChange(e.target.value)},options),
+      id&&h('input',{className:'ed',type:'password',autoComplete:'off',placeholder:'Chave API '+PRICE_PROVIDERS[id].name,style:{flex:2,fontSize:11},value:keys[id]||'',disabled:running,
+        onChange:e=>setKey(id,e.target.value)})
+    ),
+    id&&h('div',{style:{fontSize:9,color:'var(--muted)',marginTop:3,lineHeight:1.5}},PRICE_PROVIDERS[id].note+' Chave gratuita em '+PRICE_PROVIDERS[id].site+'.')
+  );
+  const opts=exclude=>Object.entries(PRICE_PROVIDERS).filter(([id])=>id!==exclude).map(([id,p])=>h('option',{key:id,value:id},p.name));
+  return h('div',{className:'input-row'},
+    MicroLabel('Cotações online — API',{size:9,mb:8}),
+    h('div',{style:{fontSize:10,color:'var(--muted)',marginBottom:8,lineHeight:1.5}},
+      'Pede as cotações das posições activas, converte para a moeda de cada posição com as taxas do BCE e mostra tudo antes de aplicar. As chaves ficam guardadas neste browser.'),
+    h('label',{style:{display:'flex',gap:6,alignItems:'flex-start',fontSize:10,color:'var(--muted)',marginBottom:8,lineHeight:1.5,cursor:'pointer'}},
+      h('input',{type:'checkbox',checked:!!cfg?.exportPriceKeys,onChange:e=>setCfg({...cfg,exportPriceKeys:e.target.checked}),style:{marginTop:2}}),
+      h('span',null,'Incluir as chaves no income-factory.json ao exportar, para as levar para outro dispositivo. ',
+        h('span',{style:{color:cfg?.exportPriceKeys?'var(--gold)':'var(--muted)'}},'Quem tiver o ficheiro fica com as chaves: nunca o ponhas no GitHub nem o partilhes.'))),
+    providerRow('Fornecedor principal',provider,changeProvider,opts()),
+    providerRow('Se falhar, tentar',fb,changeFallback,[h('option',{key:'',value:''},'Nenhum'),...opts(provider)]),
+    h('div',{className:'flex gap-1.5',style:{marginTop:4}},
+      running
+        ?h('button',{className:'btn-secondary ml-0 flex-1',onClick:()=>{cancel.current=true;}},'Cancelar')
+        :h('button',{className:'btn-primary ml-0 flex-1',onClick:run,disabled:!active.length},'Testar cotações ('+active.length+')'),
+      h('button',{className:'btn-secondary ml-0 flex-1',onClick:apply,disabled:running||!toApply.length},'Aplicar ('+toApply.length+')')
+    ),
+    message&&h('div',{style:{fontSize:10,color:'var(--muted)',marginTop:6}},message),
+    rows.length>0&&h('div',{style:{overflowX:'auto',marginTop:8}},
+      h('table',{style:{width:'100%',borderCollapse:'collapse'}},
+        h('thead',null,h('tr',null,['','Ticker','Símbolo','Fornecedor','Novo','Actual','Δ','Estado'].map(x=>h('th',{key:x,style:{...cell,color:'var(--muted)',textAlign:'left',fontWeight:700}},x)))),
+        h('tbody',null,rows.map((r,i)=>{
+          const p=active.find(x=>x.t===r.t);
+          return h('tr',{key:r.t},
+            h('td',{style:cell},h('input',{type:'checkbox',checked:!!r.apply,disabled:r.status!=='ok'||running,
+              onChange:e=>setRows(rows.map((x,j)=>j===i?{...x,apply:e.target.checked}:x))})),
+            h('td',{style:{...cell,fontWeight:700}},r.t),
+            h('td',{style:cell},h('input',{className:'ed',style:{width:84,fontSize:10},defaultValue:r.symbol,disabled:running,key:r.t+r.symbol,
+              title:'Formato: TICKER ou TICKER.BOLSA ('+Object.keys(PRICE_EXCHANGES).filter(k=>k!=='US').join(', ')+')',
+              onBlur:e=>{if(p&&e.target.value.trim().toUpperCase()!==r.symbol){changeSymbol(p,e.target.value);setRows(rows.map((x,j)=>j===i?{...x,symbol:e.target.value.trim().toUpperCase()||defaultPriceSymbol(p),status:'pending',apply:false}:x));}}})),
+            h('td',{style:cell},r.raw!=null?fmt(r.raw,r.raw<10?4:2)+' '+r.rawCurrency+' · '+short[r.via]:''),
+            h('td',{style:{...cell,color:'var(--gold)'}},r.price!=null?fmt(r.price,r.price<10?4:2)+' '+r.target:''),
+            h('td',{style:cell},fmt(r.current,r.current<10?4:2)),
+            h('td',{style:{...cell,color:r.warn?'var(--red)':'var(--muted)'}},r.diff!=null?(r.diff*100).toFixed(1)+'%':''),
+            h('td',{title:r.status==='error'?r.error:r.date?'Cotação de '+r.date+' ('+PRICE_PROVIDERS[r.via].name+')':'',style:{...cell,whiteSpace:'normal',minWidth:70,color:r.status==='error'||r.warn?'var(--red)':r.status==='ok'||r.status==='applied'?'var(--green)':'var(--muted)'}},
+              r.status==='pending'?'—':r.status==='loading'?'…':r.status==='applied'?'Aplicada':
+              r.status==='error'?r.error:(r.warn?'⚠ Verifica':'OK')+(r.date?' '+r.date.slice(5):''))
+          );
+        }))
+      ),
+      rows.some(r=>r.warn)&&h('div',{style:{fontSize:9,color:'var(--muted)',marginTop:6,lineHeight:1.5}},
+        '⚠ Verifica = mais de 25% de diferença para o preço actual. Confirma o símbolo e a moeda antes de marcar. Edita o símbolo (ex.: LGEN.L, NOV.CO) e testa de novo.')
+    )
+  );
+}
+
+function Conf({cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onReset,exportCSV,importData,exportData,importBrokerQuotes,exportBrokerQuoteTemplate}){
   const[confTab,setConfTab]=useState('config');
+  const[fxStatus,setFxStatus]=useState(null);
+  const updateFxFromEcb=async()=>{
+    setFxStatus({loading:true,text:'A obter taxa do BCE…'});
+    try{
+      const{date,rates}=await fetchEcbRates();
+      const usd=Math.round(rates.USD*10000)/10000;
+      const next={...cfg,fxEurUsd:usd,fxEurUsdAsOf:date};
+      // Keep the daily history (used for taxes) up to date when it exists.
+      if(cfg?.fxHistory&&cfg.fxHistory.rates&&typeof cfg.fxHistory.rates==='object'){
+        next.fxHistory={...cfg.fxHistory,rates:{...cfg.fxHistory.rates,[date]:usd},asOf:(cfg.fxHistory.asOf&&cfg.fxHistory.asOf>date)?cfg.fxHistory.asOf:date};
+      }
+      setCfg(next);dbs('fc',next).catch(e=>console.error('save exchange rate failed',e));
+      setFxStatus({text:`Actualizado: ${usd.toFixed(4)} (BCE, ${date})`});
+    }catch(error){setFxStatus({error:true,text:error.message});}
+  };
   const tabBtn=(id,label)=>h('button',{key:id,className:'fb'+(confTab===id?' on':''),onClick:()=>setConfTab(id)},label);
   return h('div',null,
     /* ── Inner tab bar ── */
@@ -5497,73 +5891,31 @@ function Conf({cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onReset,ex
         ''
       ),
 
-      /* Portfolio */
+      /* Data file */
       h('div',{className:'input-row'},
-        MicroLabel('portfolio.json — Posições + Dividendos',{size:9,mb:8}),
+        MicroLabel('income-factory.json — Todos os dados',{size:9,mb:8}),
+        h('div',{style:{fontSize:10,color:'var(--muted)',marginBottom:8,lineHeight:1.5}},
+          'Posições, transacções, métricas, configuração, património, teses e histórico num só ficheiro. Importar substitui os dados actuais. Guarda o ficheiro exportado fora do browser.'
+        ),
         h('div',{className:'flex gap-1.5'},
-          h('button',{className:'btn-primary ml-0 flex-1',onClick:importPortfolioJSON},'Importar'),
-          h('button',{className:'btn-secondary ml-0 flex-1',onClick:exportPortfolioJSON},'Exportar'),
+          h('button',{className:'btn-primary ml-0 flex-1',onClick:importData},'Importar'),
+          h('button',{className:'btn-secondary ml-0 flex-1',onClick:exportData},'Exportar'),
         )
       ),
 
-      /* Metrics */
-      h('div',{className:'input-row'},
-        MicroLabel('metrics.json — Quality Metrics',{size:9,mb:8}),
-        h('div',{className:'flex gap-1.5'},
-          h('button',{className:'btn-primary ml-0 flex-1',onClick:importMetricsJSON},'Importar'),
-          h('button',{className:'btn-secondary ml-0 flex-1',onClick:exportMetricsJSON},'Exportar'),
-        )
-      ),
-
-      /* Config */
-      h('div',{className:'input-row'},
-        MicroLabel('config.json — Thresholds + Prefs',{size:9,mb:8}),
-        h('div',{className:'flex gap-1.5'},
-          h('button',{className:'btn-primary ml-0 flex-1',onClick:importConfigJSON},'Importar'),
-          h('button',{className:'btn-secondary ml-0 flex-1',onClick:exportConfigJSON},'Exportar'),
-        )
-      ),
-
-      /* Wealth */
-      h('div',{className:'input-row'},
-        MicroLabel('wealth.json — Todo o património familiar',{size:9,mb:8}),
-        h('div',{className:'flex gap-1.5'},
-          h('button',{className:'btn-primary ml-0 flex-1',onClick:importWealthJSON},'Importar'),
-          h('button',{className:'btn-secondary ml-0 flex-1',onClick:exportWealthJSON},'Exportar'),
-        )
-      ),
-
-      /* Teses */
-      h('div',{className:'input-row'},
-        MicroLabel('teses.json — Teses de Investimento',{size:9,mb:8}),
-        h('div',{className:'flex gap-1.5'},
-          h('button',{className:'btn-primary ml-0 flex-1',onClick:importTesesJSON},'Importar'),
-          h('button',{className:'btn-secondary ml-0 flex-1',onClick:exportTesesJSON},'Exportar'),
-        )
-      ),
+      h(PricePanel,{cfg,setCfg,pos,setPos}),
 
       h('div',{className:'input-row'},
         MicroLabel('Cotações locais — CSV do broker',{size:9,mb:8}),
         h('div',{style:{fontSize:10,color:'var(--muted)',marginBottom:8,lineHeight:1.5}},
-          'Descarrega o template com os tickers activos e a moeda da carteira. Preenche Price e Date (YYYY-MM-DD) com os dados do broker; Last Known Price é só referência, copiada dos dados guardados na app. Esta app não consulta cotações externas. O importador aceita também Symbol, Last/Close, Currency, AsOf e EUR/USD opcional.'
+          'Descarrega o template com os tickers activos e a moeda da carteira. Preenche Price e Date (YYYY-MM-DD) com os dados do broker; Last Known Price é só referência, copiada dos dados guardados na app. Alternativa às cotações online. O importador aceita também Symbol, Last/Close, Currency, AsOf e EUR/USD opcional.'
         ),
         h('div',{className:'flex gap-1.5'},
           h('button',{className:'btn-secondary ml-0 flex-1',onClick:exportBrokerQuoteTemplate},'Descarregar template CSV'),
           h('button',{className:'btn-secondary ml-0 flex-1',onClick:importBrokerQuotes},'Importar cotações CSV')
         ),
         cfg?.quotesImportedAt&&h('div',{style:{fontSize:9,color:'var(--muted)',marginTop:6}},
-          'Última importação: '+new Date(cfg.quotesImportedAt).toLocaleString('pt-PT')
-        )
-      ),
-
-      h('div',{className:'input-row'},
-        MicroLabel('Backup completo da aplicação',{size:9,mb:8}),
-        h('div',{style:{fontSize:10,color:'var(--muted)',marginBottom:8,lineHeight:1.5}},
-          'Inclui posições, transacções, métricas, configuração, património, teses e histórico de avaliações. Guarda este ficheiro fora do browser.'
-        ),
-        h('div',{className:'flex gap-1.5'},
-          h('button',{className:'btn-primary ml-0 flex-1',onClick:importFullBackup},'Restaurar backup'),
-          h('button',{className:'btn-secondary ml-0 flex-1',onClick:exportFullBackup},'Exportar backup'),
+          'Última actualização de cotações: '+new Date(cfg.quotesImportedAt).toLocaleString('pt-PT')+(cfg.quotesSource?' · '+cfg.quotesSource:'')
         )
       ),
 
@@ -5595,11 +5947,14 @@ function Conf({cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onReset,ex
           padding:'10px 12px',background:'var(--surface)',borderRadius:6,border:'1px solid var(--border)'}},
           h('div',null,
             h('div',{style:{fontSize:12,fontWeight:700,color:'var(--text)'}},'EUR / USD'),
-            h('div',{style:{fontSize:9,color:'var(--muted)',marginTop:2}},'Taxa de câmbio'),
+            h('div',{style:{fontSize:9,color:'var(--muted)',marginTop:2}},'Taxa de câmbio'+(cfg?.fxEurUsdAsOf?' · '+cfg.fxEurUsdAsOf:'')),
+            fxStatus&&h('div',{style:{fontSize:9,color:fxStatus.error?'var(--red)':'var(--green)',marginTop:2}},fxStatus.text),
           ),
           h('div',{style:{display:'flex',alignItems:'center',gap:8}},
+            h('button',{className:'btn-secondary ml-0',style:{fontSize:10,padding:'4px 8px'},disabled:fxStatus&&fxStatus.loading,onClick:updateFxFromEcb,
+              title:'Taxa de referência do Banco Central Europeu'},fxStatus&&fxStatus.loading?'…':'BCE'),
             h('input',{
-              className:'ed',
+              className:'ed',key:'fx_'+(cfg?.fxEurUsd||1.08),
               style:{width:72,textAlign:'right',color:'var(--gold)',fontSize:12,fontWeight:700},
               defaultValue:(cfg?.fxEurUsd||1.08).toFixed(4),
               onBlur:e=>{
@@ -6022,7 +6377,7 @@ function AllTransactions({pos,sold,cfg}){
     )
   );
 }
-function TransactionsPage({cfg,pos,setPos,sold,setSold,income,qual,setQual,exportPortfolioJSON}){
+function TransactionsPage({cfg,pos,setPos,sold,setSold,income,qual,setQual}){
   const[txTab,setTxTab]=useState('alltx');
   const tabBtn=(id,label)=>h('button',{key:id,className:'fb'+(txTab===id?' on':''),onClick:()=>setTxTab(id)},label);
   return h('div',null,
@@ -6218,9 +6573,10 @@ function TxAccordion({p,setPos,cfg,isSold}){
   },
     isSold?(p.exit||exitDateFallback||'—'):
     h('input',{className:'ed',style:{width:76,textAlign:'right'},defaultValue:p.cv,key:'cv_'+pid,
-      title:p.cvAsOf?`Cotação importada do broker em ${p.cvAsOf}`:'Preço sem data de cotação registada',
-      onBlur:e=>{const v=parseFloat(e.target.value);if(!isNaN(v))setPos(prev=>prev.map(x=>(x.id||x.t)===pid?{...x,cv:v}:x));},
-      onKeyDown:e=>e.key==='Enter'&&e.target.blur()})
+      title:priceFreshness(p).title,
+      onBlur:e=>{const v=parseFloat(e.target.value);if(!isNaN(v)&&v!==p.cv)setPos(prev=>prev.map(x=>(x.id||x.t)===pid?{...x,cv:v,cvAsOf:new Date().toISOString().slice(0,10),cvSource:'manual'}:x));},
+      onKeyDown:e=>e.key==='Enter'&&e.target.blur()}),
+    !isSold&&h(StaleDot,{p})
   );
   const noTxRow=h('tr',null,
     h('td',{style:{padding:'10px 10px',color:'var(--muted)',width:28}},'—'),
