@@ -1795,10 +1795,13 @@ const enc=encodeURIComponent;
 const PRICE_PROVIDERS={
   twelvedata:{
     name:'Twelve Data',site:'twelvedata.com',delayMs:8000,dailyLimit:800,
-    note:'Grátis: 8 pedidos/minuto, 800/dia. Devolve a moeda de cada cotação.',
+    note:'Grátis: 8 pedidos/minuto, 800/dia, só bolsas dos EUA (bolsas europeias exigem plano pago). Devolve a moeda de cada cotação.',
     url:(s,key)=>`https://api.twelvedata.com/quote?symbol=${enc(s.base)}${s.exchange.mic?'&mic_code='+s.exchange.mic:''}&apikey=${enc(key)}`,
     parse:json=>{
-      if(json.status==='error'||json.code)throw new Error(json.message||'erro do fornecedor');
+      if(json.status==='error'||json.code){
+        const m=json.message||'erro do fornecedor';
+        throw new Error(/plan|upgrad/i.test(m)?'Só disponível em plano pago deste fornecedor.':m);
+      }
       return{price:parseFloat(json.close),date:String(json.datetime||'').slice(0,10),currency:json.currency||null};
     },
   },
@@ -1849,12 +1852,17 @@ async function fetchQuote(providerId,symbol,key){
   let res;
   try{res=await fetch(provider.url(s,key));}
   catch(e){throw new Error('Pedido bloqueado pelo browser ou sem rede.');}
-  if(res.status===401||res.status===403)throw new Error('Sem acesso: chave inválida ou ticker fora do plano.');
-  if(res.status===404)throw new Error('Símbolo não encontrado.');
-  if(res.status===429)throw new Error('Limite de pedidos atingido.');
-  if(!res.ok)throw new Error('Erro HTTP '+res.status+'.');
-  let json;
-  try{json=await res.json();}catch(e){throw new Error('Resposta inválida do fornecedor.');}
+  let json=null;
+  try{json=await res.json();}catch(e){if(res.ok)throw new Error('Resposta inválida do fornecedor.');}
+  if(!res.ok){
+    const detail=json&&(json.message||json.error||json.Information||json.Note);
+    // Providers answer tickers outside the free plan with 403/404 plus an explanation.
+    if(detail&&/plan|upgrad|subscri|premium|access/i.test(detail))throw new Error('Só disponível em plano pago deste fornecedor.');
+    if(res.status===401||res.status===403)throw new Error('Sem acesso: chave inválida ou ticker fora do plano.');
+    if(res.status===404)throw new Error(detail?'Não encontrado: '+String(detail).slice(0,80):'Símbolo não encontrado.');
+    if(res.status===429)throw new Error('Limite de pedidos atingido.');
+    throw new Error('Erro HTTP '+res.status+(detail?': '+String(detail).slice(0,80):'.'));
+  }
   const quote=provider.parse(json||{});
   if(!Number.isFinite(quote.price)||quote.price<=0)throw new Error('Preço inválido.');
   return{...quote,currency:quote.currency||s.exchange.currency};
