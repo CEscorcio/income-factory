@@ -1673,7 +1673,7 @@ function readDataFile(json,fileName){
     if(!Object.keys(theses).length)throw new Error(`${fileName}: não reconheço este ficheiro.`);
     data.theses=theses;
   }
-  return{kind:'partial',data};
+  return{kind:'partial',data,fileName};
 }
 // Combines several files picked together. One full file can be combined with
 // old single-section files; those then override its sections.
@@ -1681,7 +1681,14 @@ function combineDataFiles(results){
   const fulls=results.filter(r=>r.kind==='full');
   if(fulls.length>1)throw new Error('Escolhe só um ficheiro income-factory.json de cada vez.');
   const data=fulls.length?{...fulls[0].data}:{};
-  results.filter(r=>r.kind==='partial').forEach(r=>Object.assign(data,r.data));
+  const seen={};
+  results.filter(r=>r.kind==='partial').forEach(r=>{
+    Object.keys(r.data).forEach(key=>{
+      if(seen[key])throw new Error(`${seen[key]} e ${r.fileName} têm os mesmos dados (${key}). Escolhe só um deles.`);
+      seen[key]=r.fileName;
+    });
+    Object.assign(data,r.data);
+  });
   return{full:fulls.length>0,data};
 }
 // Older metrics.json files carried dividends per ticker; they now live on each position's divByYear.
@@ -1701,6 +1708,24 @@ function normalizeConfig(config){
     if(!merged[k]||Object.keys(merged[k]).length===0)merged[k]=DCFG[k];
   });
   return merged;
+}
+// In the installed app (standalone) a plain download is unreliable on iOS, so the
+// file goes to the share sheet ("Guardar em Ficheiros"). Elsewhere it downloads.
+// Must be called directly from a click: navigator.share needs the user gesture.
+function saveJsonFile(data,filename){
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const standalone=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;
+  if(standalone&&navigator.canShare&&typeof File==='function'){
+    const file=new File([blob],filename,{type:'application/json'});
+    if(navigator.canShare({files:[file]})){
+      return navigator.share({files:[file],title:filename}).then(()=>'shared',error=>{
+        if(error&&error.name==='AbortError')return'cancelled';
+        downloadBlob(blob,filename);return'downloaded';
+      });
+    }
+  }
+  downloadBlob(blob,filename);
+  return Promise.resolve('downloaded');
 }
 function openFilesPicker(accept,cb){
   const inp=document.createElement('input');inp.type='file';inp.accept=accept;inp.multiple=true;
@@ -3781,21 +3806,23 @@ function App(){
   },[pos,qual,cfg,sold,wealth,teses]);
 
   // ── Data file import / export (income-factory.json) ──────────────────────
-  const tod=useMemo(()=>new Date().toISOString().slice(0,10),[]);
   const readValuations=()=>{
     const raw=localStorage.getItem('if_vh');
     return validateValuationHistory(raw===null?[]:JSON.parse(raw));
   };
   const exportData=useCallback(()=>{
+    const done=message=>{setToast(message);setTimeout(()=>setToast(''),5000);};
     try{
-      dlJSON(buildDataFile({pos,sold,qual,cfg,wealth,teses,valuations:readValuations()}),'income-factory_'+tod+'.json');
-      setToast('Dados exportados para income-factory_'+tod+'.json. Guarda este ficheiro fora do browser.');
+      const filename='income-factory_'+new Date().toISOString().slice(0,10)+'.json';
+      saveJsonFile(buildDataFile({pos,sold,qual,cfg,wealth,teses,valuations:readValuations()}),filename).then(result=>{
+        if(result==='cancelled')done('Exportação cancelada.');
+        else done(filename+' '+(result==='shared'?'partilhado':'exportado')+'. Guarda este ficheiro fora do browser.');
+      });
     }catch(error){
       console.error('data export failed',error);
-      setToast('Não foi possível exportar os dados: '+error.message);
+      done('Não foi possível exportar os dados: '+error.message);
     }
-    setTimeout(()=>setToast(''),5000);
-  },[pos,sold,qual,cfg,wealth,teses,tod]);
+  },[pos,sold,qual,cfg,wealth,teses]);
   const importData=useCallback(()=>{
     openFilesPicker('.json,application/json',async files=>{
       try{
