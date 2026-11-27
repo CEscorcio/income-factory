@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.2';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.3';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -102,6 +102,9 @@ a{color:var(--blue);text-decoration:none;}
 .toast{position:fixed;bottom:24px;right:24px;background:#238636;color:#fff;padding:8px 16px;border-radius:6px;font-size:12px;font-weight:600;z-index:9999;pointer-events:none;}
 
 /* ── Top navigation bar ── */
+/* Table whose header stays visible while its rows scroll (Quality Score) */
+.sticky-head{max-height:calc(100vh - 120px);overflow:auto !important;}
+.sticky-head thead th{position:sticky;top:0;z-index:2;background:var(--surface);box-shadow:inset 0 -1px 0 var(--border);}
 .bar{
   display:flex;align-items:center;gap:8px;
   padding:0 12px;min-height:48px;
@@ -7107,7 +7110,7 @@ function Income({pos,setPos,income,qual,setQual,sold,cfg,initialTab}){
         h('a',{href:'https://alreits.com/dashboard',target:'_blank',rel:'noopener noreferrer',style:{color:'var(--blue)',textDecoration:'underline'}},'Alreits'),
         ' para consultar o payout ratio.'
       ),
-      h('div',{className:'card-table overflow-x-auto'},
+      h('div',{className:'card-table sticky-head'},
         h('table',null,
           h('thead',null,h('tr',null,
             ['Ticker','Score','DivGr 1A','DivGr 3A','DivGr 5A','DivGr 10A','Payout %','Yield %','Buyback %','EPS Gr%','Debt x','ROIC %','FCF %','Rev Gr%','Op Mar%'].map(x=>h('th',{key:x},x))
