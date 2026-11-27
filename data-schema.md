@@ -233,6 +233,12 @@ Currently written: JPM, PEP, PG, MAIN, O, KO, XOM, TROW, COR.LS, DG.PA, NOV.DE, 
   "scorecardTotal": "84 / 100",
   "scorecard": [ { "metric": "Payout Ratio", "score": "10 / 12" } ],     // 12 metrics; the maxima add up to 100
   "finalDecision": { "rating": "BUY / HOLD", "fairValue": "~$94", "dividendYield": "2,41%", "epsGrowth": "4–6%", "divGrowth": "4–6%", "totalReturn": "…" },
+  "swot": {                            // 4 items per quadrant, shown as a 2×2 SWOT matrix
+    "strengths":     [ { "title": "Marca icónica", "note": "A marca de bebidas mais valiosa do mundo." } ],
+    "weaknesses":    [ { "title": "…", "note": "…" } ],
+    "opportunities": [ { "title": "…", "note": "…" } ],
+    "threats":       [ { "title": "…", "note": "…" } ]
+  },
   "keyPhrase": "one-sentence summary",
   "followUpQuestion": "what to monitor, with a keep/review rule",
 

@@ -24,6 +24,8 @@ The page renders, in order:
 11. Valuation
 12. Decisão Final
 
+The `swot` (4 items per quadrant: `{title, note}`, title of 2–4 words, note of one short sentence) is shown as an "Análise SWOT" matrix above the numbered sections; keep it consistent with the moat, main risk, bear case and growth thesis.
+
 The `scorecard` is not a numbered section: it is shown inside the "Fundamentais & Scorecard" card, next to the metrics from `quality`.
 
 A missing section simply doesn't render, so leave out what you can't support rather than padding it. Write only the fields of the template: the app ignores any other field, so extras are dead weight in the user's file.

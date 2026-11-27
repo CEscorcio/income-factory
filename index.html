@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.26';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.27';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -109,6 +109,14 @@ a{color:var(--blue);text-decoration:none;}
 /* Dividend calendar: 4 months per row (2 on phones) */
 .cal-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:8px;}
 @media(max-width:640px){.cal-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+/* SWOT matrix (Teses): 2×2 coloured quadrants with axis labels; one column on phones */
+.swot{display:grid;grid-template-columns:52px 1fr 1fr;grid-template-rows:auto auto auto;gap:8px;}
+.swot-head{background:#2b2f36;color:#f3f4f6;border-radius:6px;padding:8px 10px;text-align:center;}
+.swot-side{background:#2b2f36;color:#f3f4f6;border-radius:6px;display:flex;align-items:center;justify-content:center;}
+.swot-side>div{transform:rotate(-90deg);white-space:nowrap;text-align:center;}
+.swot-q{border-radius:6px;padding:14px 14px 16px;color:#16181d;}
+.swot-items{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px;margin-top:10px;}
+@media(max-width:700px){.swot{grid-template-columns:1fr;}.swot-head,.swot-side,.swot-corner{display:none;}.swot-items{grid-template-columns:1fr;}}
 /* Table whose header stays visible while its rows scroll (Quality Score) */
 .sticky-head{max-height:calc(100vh - 120px);overflow:auto !important;}
 .sticky-head thead th{position:sticky;top:0;z-index:2;background:var(--surface);box-shadow:inset 0 -1px 0 var(--border);}
@@ -1679,7 +1687,7 @@ function readLegacyPortfolio(data){
 }
 const WEALTH_KEYS=['ppr','aforro','depositos','juros','claudiaInvestimentos','carlitosInvestimentos'];
 // An old teses.json is an object of theses; each one has at least one of these sections.
-const THESIS_FIELDS=['name','meta','thesis','business','moat','dividends','financials','keyPhrase','finalDecision'];
+const THESIS_FIELDS=['name','meta','thesis','business','moat','dividends','financials','keyPhrase','finalDecision','swot'];
 function looksLikeThesis(entry){return hasAnyKey(entry,THESIS_FIELDS);}
 function hasAnyKey(obj,keys){return keys.some(key=>Object.prototype.hasOwnProperty.call(obj,key));}
 // Reads any file the app has ever exported. Returns {kind, data} where data holds
@@ -9231,6 +9239,44 @@ function TesesScorecard({items,total}){
     })
   );
 }
+// ── SWOT (thesis.swot = { strengths, weaknesses, opportunities, threats }: 4 × {title, note}) ──
+const SWOT_Q={
+  strengths:{label:'Forças',bg:'#f4bf5f',icon:'★'},
+  weaknesses:{label:'Fraquezas',bg:'#5fa4a3',icon:'▼'},
+  opportunities:{label:'Oportunidades',bg:'#5aaed8',icon:'↗'},
+  threats:{label:'Ameaças',bg:'#eb6f5a',icon:'⚠'},
+};
+function TesesSwot({swot}){
+  if(!swot||!['strengths','weaknesses','opportunities','threats'].some(k=>(swot[k]||[]).length))return null;
+  const item=(it,icon,i)=>{
+    const title=typeof it==='string'?it:it?.title;
+    const note=typeof it==='string'?null:it?.note;
+    return h('div',{key:i,style:{display:'flex',gap:8,alignItems:'flex-start'}},
+      h('div',{style:{width:26,height:26,flexShrink:0,borderRadius:'50%',border:'1.5px solid rgba(22,24,29,.75)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700}},icon),
+      h('div',null,
+        h('div',{style:{fontSize:12,fontWeight:800,lineHeight:1.25}},title),
+        note&&h('div',{style:{fontSize:11,lineHeight:1.35,marginTop:2,opacity:.85}},note)
+      )
+    );
+  };
+  const quad=k=>{
+    const q=SWOT_Q[k];
+    return h('div',{key:k,className:'swot-q',style:{background:q.bg}},
+      h('div',{style:{fontSize:20,fontWeight:800,textAlign:'center',letterSpacing:'-.01em'}},q.label),
+      h('div',{className:'swot-items'},(swot[k]||[]).slice(0,4).map((it,i)=>item(it,q.icon,i)))
+    );
+  };
+  const head=(a,b)=>h('div',{className:'swot-head'},h('div',{style:{fontSize:14,fontWeight:700}},a),h('div',{style:{fontSize:10,opacity:.8}},b));
+  const side=(a,b)=>h('div',{className:'swot-side'},h('div',null,h('div',{style:{fontSize:13,fontWeight:700}},a),h('div',{style:{fontSize:9,opacity:.8}},b)));
+  return h('div',{className:'card mb-4'},
+    h(Shdr,{title:'Análise SWOT',hint:'Forças e fraquezas: internas · oportunidades e ameaças: externas'}),
+    h('div',{className:'swot',style:{marginTop:10}},
+      h('div',{className:'swot-corner'}),head('Útil','para atingir o objectivo'),head('Prejudicial','para atingir o objectivo'),
+      side('Origem interna','atributos da empresa'),quad('strengths'),quad('weaknesses'),
+      side('Origem externa','atributos do contexto'),quad('opportunities'),quad('threats')
+    )
+  );
+}
 function TesesList(items,color){
   if(!items||!items.length)return h('div',{style:{fontSize:11,color:'var(--muted)',fontStyle:'italic',padding:'4px 0'}},'Sem dados');
   return h('ul',{style:{margin:0,paddingLeft:18,display:'flex',flexDirection:'column',gap:4}},
@@ -9393,6 +9439,8 @@ function TesesPage({pos,teses,qual}){
           h(TesesScorecard,{items:t.scorecard,total:t.scorecardTotal})
         )
       ),
+
+      h(TesesSwot,{swot:t.swot}),
 
       t.dividends&&h(TesesDividends,{key:ticker,data:t.dividends}),
 
