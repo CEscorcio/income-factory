@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.7';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.12';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -102,6 +102,10 @@ a{color:var(--blue);text-decoration:none;}
 .toast{position:fixed;bottom:24px;right:24px;background:#238636;color:#fff;padding:8px 16px;border-radius:6px;font-size:12px;font-weight:600;z-index:9999;pointer-events:none;}
 
 /* ── Top navigation bar ── */
+/* Donut chart + legend: legend columns spread evenly over the free width */
+.donut-wrap{display:grid;grid-template-columns:240px minmax(0,1fr);gap:16px;align-items:center;}
+.donut-legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:6px 12px;width:100%;}
+@media(max-width:640px){.donut-wrap{grid-template-columns:1fr;justify-items:center;}}
 /* Table whose header stays visible while its rows scroll (Quality Score) */
 .sticky-head{max-height:calc(100vh - 120px);overflow:auto !important;}
 .sticky-head thead th{position:sticky;top:0;z-index:2;background:var(--surface);box-shadow:inset 0 -1px 0 var(--border);}
@@ -7145,17 +7149,6 @@ function Income({pos,setPos,income,qual,setQual,sold,cfg,initialTab}){
   ),   /* end qtab==='income' */
     qtab==='metricas'&&h('div',null,
       h(Shdr,{title:'Quality Score',hint:qualLastUpdate?'Última actualização: '+qualLastUpdate:''}),
-      h('div',{className:'card-sm mb-3',style:{fontSize:12,lineHeight:1.7}},
-        'Para preencher os dados, consulte ',
-        h('a',{href:'https://fiscal.ai/company/NYSE-VICI/financials/income-statement/annual/',target:'_blank',rel:'noopener noreferrer',style:{color:'var(--blue)',textDecoration:'underline'}},'Fiscal.ai'),
-        ' e carregue o template ',
-        h('strong',null,'Scoring System'),
-        ' em ',
-        h('strong',null,'Template Metrics'),
-        '. Para REITs, use ',
-        h('a',{href:'https://alreits.com/dashboard',target:'_blank',rel:'noopener noreferrer',style:{color:'var(--blue)',textDecoration:'underline'}},'Alreits'),
-        ' para consultar o payout ratio.'
-      ),
       h('div',{className:'card-table sticky-head'},
         h('table',null,
           h('thead',null,h('tr',null,
@@ -7224,6 +7217,17 @@ function Income({pos,setPos,income,qual,setQual,sold,cfg,initialTab}){
         h('span',{className:'mono-xs-muted'},label)
       ))
     ),
+    qtab==='metricas'&&h('div',{className:'card-sm mt-3',style:{fontSize:12,lineHeight:1.7}},
+        'Para preencher os dados, consulte ',
+        h('a',{href:'https://fiscal.ai/company/NYSE-VICI/financials/income-statement/annual/',target:'_blank',rel:'noopener noreferrer',style:{color:'var(--blue)',textDecoration:'underline'}},'Fiscal.ai'),
+        ' e carregue o template ',
+        h('strong',null,'Scoring System'),
+        ' em ',
+        h('strong',null,'Template Metrics'),
+        '. Para REITs, use ',
+        h('a',{href:'https://alreits.com/dashboard',target:'_blank',rel:'noopener noreferrer',style:{color:'var(--blue)',textDecoration:'underline'}},'Alreits'),
+        ' para consultar o payout ratio.'
+      ),
     qtab==='holdings'&&h(HoldingsEdit,{pos,setPos,cfg,qual}),  /* end qtab==='holdings' */
 
   );
@@ -7387,7 +7391,7 @@ function DividendosEstPorPosicaoPie({pos,qualMap,cfg,standalone=false}){
   const slices=computeDonutSlices(items.map((x,i)=>({...x,val:x.v,col:COLS[i%COLS.length]})),CX,CY,R,ri);
   return h('div',{className:standalone?'card':'mt-5 pt-5',style:standalone?null:{borderTop:'1px solid var(--border)'}},
     h(Shdr,{title:'Dividendos Estimados por Posição',hint:items.length+' posições · anual, yield actual × posição'}),
-    h('div',{style:{display:'flex',gap:16,alignItems:'center',flexWrap:'wrap'}},
+    h('div',{className:'donut-wrap'},
       h('svg',{width:240,height:240,className:'shrink-0'},
         slices.map(sl=>h('path',{key:sl.t,d:sl.d,fill:sl.col,
           opacity:hov&&hov!==sl.t?.25:1,className:'cursor-pointer transition-opacity duration-150',
@@ -7396,7 +7400,7 @@ function DividendosEstPorPosicaoPie({pos,qualMap,cfg,standalone=false}){
         h('text',{x:CX,y:CY+12,textAnchor:'middle',fontSize:hov?16:11,fontWeight:700,fill:'var(--green)'},
           hov?(slices.find(s=>s.t===hov)?.pct*100||0).toFixed(1)+'%':'estimado')
       ),
-      h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'4px 16px'}},
+      h('div',{className:'donut-legend'},
         slices.map(sl=>h('div',{key:sl.t,style:{display:'flex',alignItems:'center',gap:5,cursor:'pointer',opacity:hov&&hov!==sl.t?.3:1},
           onMouseEnter:()=>setHov(sl.t),onMouseLeave:()=>setHov(null)},
           h('div',{style:{width:8,height:8,borderRadius:6,background:sl.col,flexShrink:0}}),
@@ -8128,11 +8132,16 @@ const HoldingsPerf=memo(function HoldingsPerf({pos,income}){
 // Hoisted to top level — was previously defined inside DividendosPage's render
 // body and used as a JSX component, forcing a full unmount/remount of every
 // row on every re-render.
+// Estimated annual dividend of an active position: yield × shares × current price
+// (same as the current-year estimate in the annual bar charts). Null when unknown.
+function positionEstAnnual(p,qualMap){
+  const dy=getQual(qualMap,p.t)?.dy||0;
+  return dy>0&&p.n>0&&p.cv>0?dy*p.n*p.cv:null;
+}
 function IncRow({p,sm,qualMap,income,DISP_YEARS,GROWTH}){
-  const q=getQual(qualMap,p.t);
-  const dy=q?.dy||0;
-  // Est. next year = yield × shares × current price × (1 + divGrowth)
-  const est=dy>0&&p.n>0&&p.cv>0 ? dy*p.n*p.cv*GROWTH : null;
+  // Est. this year = yield × shares × price; Est. next year = that × (1 + divGrowth)
+  const est=positionEstAnnual(p,qualMap);
+  const estNext=est!=null?est*GROWTH:null;
   const vals=DISP_YEARS.map(y=>getIncomeYear(income,p.t,y));
   const total=getIncome(income,p.t);
   const hasAny=total>0||est;
@@ -8141,6 +8150,8 @@ function IncRow({p,sm,qualMap,income,DISP_YEARS,GROWTH}){
     h('td',null,h(TickerLink,{t:p.t,className:'font-semibold'})),
     h('td',{className:'mono-sm-italic'},
       est?sm+fn(est):'—'),
+    h('td',{className:'mono-sm-italic'},
+      estNext?sm+fn(estNext):'—'),
     ...DISP_YEARS.map((y,i)=>h('td',{key:y,style:{
       color:y===CUR_YEAR?'var(--gold)':'var(--text)',
       fontWeight:y===CUR_YEAR?600:400,
@@ -8165,19 +8176,19 @@ function GroupSection({grp,sm,label,headerBg,labelColor,qualMap,income,DISP_YEAR
   if(!rows.length)return null;
   const totals=Object.fromEntries(DISP_YEARS.map(y=>[y,grp.reduce((s,p)=>s+getIncomeYear(income,p.t,y),0)]));
   const grandTotal=grp.reduce((s,p)=>s+getIncome(income,p.t),0);
-  const estTotal=grp.reduce((s,p)=>{
-    const q=getQual(qualMap,p.t);const dy=q?.dy||0;
-    return s+(dy>0&&p.n>0&&p.cv>0?dy*p.n*p.cv*GROWTH:0);
-  },0);
+  const estTotal=grp.reduce((s,p)=>s+(positionEstAnnual(p,qualMap)||0),0);
+  const estNextTotal=estTotal*GROWTH;
   return h('tbody',null,
     h('tr',{style:{background:headerBg}},
-      h('td',{colSpan:DISP_YEARS.length+3,style:{padding:'8px 12px',fontSize:10,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:labelColor}},'[ '+label+' ]')
+      h('td',{colSpan:DISP_YEARS.length+4,style:{padding:'8px 12px',fontSize:10,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:labelColor}},'[ '+label+' ]')
     ),
     ...rows,
     h('tr',{className:'bg-[var(--s2)]'},
       h('td',null,h('span',{style:{fontWeight:600,color:labelColor,fontSize:12}},sm==='$'?'$ TOTAL':'€ TOTAL')),
       h('td',{className:'mono-sm-italic'},
         estTotal>0?sm+fn(estTotal):'—'),
+      h('td',{className:'mono-sm-italic'},
+        estNextTotal>0?sm+fn(estNextTotal):'—'),
       ...DISP_YEARS.map(y=>h('td',{key:y,style:{fontWeight:600,color:y===CUR_YEAR?'var(--gold)':'var(--text)'}},
         totals[y]>0?sm+fn(totals[y]):'—')),
       h('td',{className:'font-bold text-[var(--green)]'},
@@ -8504,7 +8515,7 @@ function DividendosPage({pos,income,qual,sold,cfg}){
             items.map((x,i)=>({...x,val:x.yld,col:CHART_PALETTE[i%CHART_PALETTE.length]})),
             CX,CY,R,ri
           );
-          return h('div',{style:{display:'grid',gridTemplateColumns:'240px 1fr',gap:16,alignItems:'center'}},
+          return h('div',{className:'donut-wrap'},
             h('svg',{width:240,height:240,viewBox:'0 0 240 240'},
               slices.map(sl=>{
                 const isH=hov===sl.t;
@@ -8523,7 +8534,7 @@ function DividendosPage({pos,income,qual,sold,cfg}){
                 hov?(items.find(x=>x.t===hov)?.yld*100||0).toFixed(1)+'%':'por Ticker'
               )
             ),
-            h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'4px 16px'}},
+            h('div',{className:'donut-legend'},
               slices.map(sl=>h('div',{key:sl.t,
                 style:{display:'flex',alignItems:'center',gap:5,cursor:'pointer',opacity:hov&&hov!==sl.t?.4:1},
                 onMouseEnter:()=>setHov(sl.t),onMouseLeave:()=>setHov(null),
@@ -8553,10 +8564,8 @@ function DividendosPage({pos,income,qual,sold,cfg}){
     incTab==='posicoes'&&(()=>{
       const sortVal=(p,field)=>{
         if(field==='ticker')return p.t;
-        if(field==='est'){
-          const q=getQual(qualMap,p.t);const dy=q?.dy||0;
-          return dy>0&&p.n>0&&p.cv>0?dy*p.n*p.cv*GROWTH:0;
-        }
+        if(field==='est')return positionEstAnnual(p,qualMap)||0;
+        if(field==='estNext')return(positionEstAnnual(p,qualMap)||0)*GROWTH;
         if(field==='total')return getIncome(income,p.t);
         return getIncomeYear(income,p.t,field); // field is a year number
       };
@@ -8570,13 +8579,14 @@ function DividendosPage({pos,income,qual,sold,cfg}){
       return h('div',{className:'mb-4'},
         h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}},
           h(Shdr,{title:'Rendimento por Posição'}),
-          h('span',{style:{fontSize:9,color:'var(--muted)',fontStyle:'italic'}},'Est. = yield × posições × preço × '+GROWTH.toFixed(3))
+          h('span',{style:{fontSize:9,color:'var(--muted)',fontStyle:'italic'}},'Est. '+CUR_YEAR+' = yield × posições × preço · Est. '+(CUR_YEAR+1)+' = Est. '+CUR_YEAR+' × '+GROWTH.toFixed(3))
         ),
-        h('div',{className:'card-table overflow-x-auto'},
+        h('div',{className:'card-table sticky-head'},
           h('table',null,
             h('thead',null,h('tr',null,
               thSort('ticker','Ticker',{textAlign:'left'}),
-              thSort('est','Est. '+new Date().getFullYear(),{color:'var(--muted)',fontStyle:'italic',fontSize:10,whiteSpace:'nowrap'}),
+              thSort('est','Est. '+CUR_YEAR,{color:'var(--muted)',fontStyle:'italic',fontSize:10,whiteSpace:'nowrap'}),
+              thSort('estNext','Est. '+(CUR_YEAR+1),{color:'var(--muted)',fontStyle:'italic',fontSize:10,whiteSpace:'nowrap'}),
               ...DISP_YEARS.map(y=>thSort(y,y,{color:y===CUR_YEAR?'var(--gold)':'inherit'})),
               thSort('total','Total'),
             )),
@@ -8591,7 +8601,7 @@ function DividendosPage({pos,income,qual,sold,cfg}){
     incTab==='fechadas'&&(soldWithDivUSD.length>0||soldWithDivEUR.length>0)&&h('div',{className:'mb-4'},
       h(Shdr,{title:'Dividendos — Posições Fechadas',hint:'Rendimento por ano durante o período de detenção'}),
       (()=>{
-        return h('div',{className:'card-table overflow-x-auto'},
+        return h('div',{className:'card-table sticky-head'},
           h('table',null,
             h('thead',null,h('tr',null,
               h('th',{className:'text-left'},'Ticker'),
@@ -8692,18 +8702,20 @@ function DividendosPage({pos,income,qual,sold,cfg}){
       );
     })(),
 
+    /* ── Calendar (8/12) + DRIP (4/12) side by side ── */
+    h('div',{className:'split-8-4 mt-4',style:{alignItems:'start'}},
     /* ── Dividend calendar projection, allocated across each position's known
        payment months using current yield × shares × price. ── */
     (()=>{
       const calendar=buildDividendCalendarData(pos||[],qualMap,cfg?.fxEurUsd||1.08);
       const maxMonth=Math.max(...calendar.months.map(month=>month.totalEUR),1);
       const averageMonth=calendar.annualEUR/12;
-      return h('div',{className:'card mt-4'},
+      return h('div',{className:'card split-8'},
         h(Shdr,{title:'Calendário de Dividendos',hint:'Projeção anual distribuída pelos meses de pagamento'}),
         calendar.annualEUR<=0
           ? h('div',{style:{padding:'16px 0',textAlign:'center',color:'var(--muted)',fontSize:12}},
               'Sem projeção disponível. Preenche o Yield % e os meses de pagamento das posições.')
-          : h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))',gap:10,marginTop:8}},
+          : h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:10,marginTop:8}},
               [
                 h('div',{key:'summary',style:{gridColumn:'1/-1',display:'flex',gap:20,flexWrap:'wrap',alignItems:'baseline',padding:'4px 2px 8px'}},
                   h('div',null,
@@ -8765,7 +8777,7 @@ function DividendosPage({pos,income,qual,sold,cfg}){
       const totalDivEUR=dripRows.filter(r=>r.cat!=='USD').reduce((s,r)=>s+r.div,0);
       const totalUnits=dripRows.reduce((s,r)=>s+r.units,0);
 
-      return h('div',{className:'card mt-4'},
+      return h('div',{className:'card split-4'},
         h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:14,flexWrap:'wrap',gap:8}},
           h(Shdr,{title:'DRIP — Reinvestimento de Dividendos',hint:'Estimativa baseada no Dividend Yield actual × nº de acções × preço actual'})
         ),
@@ -8775,9 +8787,9 @@ function DividendosPage({pos,income,qual,sold,cfg}){
               h('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:12}},
                 h('thead',null,h('tr',null,
                   h('th',{className:'text-left'},'Ticker'),
-                  h('th',{className:'text-right'},'Div. Estimado/ano'),
-                  h('th',{className:'text-right'},'Unidades DRIP'),
-                  h('th',null,'Progresso p/ próxima unidade'),
+                  h('th',{className:'text-right'},'Div./ano'),
+                  h('th',{className:'text-right'},'Unid. DRIP'),
+                  h('th',{title:'Progresso para a próxima unidade'},'Próx. unidade'),
                 )),
                 h('tbody',null,
                   dripRows.map(r=>{
@@ -8788,7 +8800,7 @@ function DividendosPage({pos,income,qual,sold,cfg}){
                       h('td',{style:{textAlign:'right',fontWeight:700,color:'var(--gold)',fontFamily:'var(--mono)'}},
                         r.units.toFixed(3)+(r.whole>0?' ('+r.whole+')':'')
                       ),
-                      h('td',{style:{padding:'5px 12px',minWidth:160}},
+                      h('td',{style:{padding:'5px 12px',minWidth:110}},
                         h('div',{style:{display:'flex',alignItems:'center',gap:8}},
                           h('div',{style:{flex:1,height:6,background:'var(--s2)',borderRadius:6,overflow:'hidden'}},
                             h('div',{style:{height:'100%',width:(r.frac*100)+'%',
@@ -8817,6 +8829,7 @@ function DividendosPage({pos,income,qual,sold,cfg}){
             ),
       );
     })(),
+    ), /* end calendar + DRIP */
 
     /* ── Chowder Rule (8/12 colunas) + Desaceleração (4/12 colunas) ── */
     h('div',{className:'split-8-4 mt-4'},
