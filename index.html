@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.24';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.25';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -9310,7 +9310,8 @@ function TesesDividends({data}){
 }
 function TesesPage({pos,teses,qual}){
   const allTickers=useMemo(()=>{
-    return[...new Set((pos||[]).filter(p=>p.n>0).map(p=>p.t))].sort();
+    // Theses are for individual stocks: ETFs are left out of the list.
+    return[...new Set((pos||[]).filter(p=>p.n>0&&p.cat!=='ETF').map(p=>p.t))].sort();
   },[pos]);
   const[ticker,setTicker]=useState(allTickers[0]||'');
   useEffect(()=>{
