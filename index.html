@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.11';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.12';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -8702,18 +8702,20 @@ function DividendosPage({pos,income,qual,sold,cfg}){
       );
     })(),
 
+    /* ── Calendar (8/12) + DRIP (4/12) side by side ── */
+    h('div',{className:'split-8-4 mt-4',style:{alignItems:'start'}},
     /* ── Dividend calendar projection, allocated across each position's known
        payment months using current yield × shares × price. ── */
     (()=>{
       const calendar=buildDividendCalendarData(pos||[],qualMap,cfg?.fxEurUsd||1.08);
       const maxMonth=Math.max(...calendar.months.map(month=>month.totalEUR),1);
       const averageMonth=calendar.annualEUR/12;
-      return h('div',{className:'card mt-4'},
+      return h('div',{className:'card split-8'},
         h(Shdr,{title:'Calendário de Dividendos',hint:'Projeção anual distribuída pelos meses de pagamento'}),
         calendar.annualEUR<=0
           ? h('div',{style:{padding:'16px 0',textAlign:'center',color:'var(--muted)',fontSize:12}},
               'Sem projeção disponível. Preenche o Yield % e os meses de pagamento das posições.')
-          : h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))',gap:10,marginTop:8}},
+          : h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:10,marginTop:8}},
               [
                 h('div',{key:'summary',style:{gridColumn:'1/-1',display:'flex',gap:20,flexWrap:'wrap',alignItems:'baseline',padding:'4px 2px 8px'}},
                   h('div',null,
@@ -8775,7 +8777,7 @@ function DividendosPage({pos,income,qual,sold,cfg}){
       const totalDivEUR=dripRows.filter(r=>r.cat!=='USD').reduce((s,r)=>s+r.div,0);
       const totalUnits=dripRows.reduce((s,r)=>s+r.units,0);
 
-      return h('div',{className:'card mt-4'},
+      return h('div',{className:'card split-4'},
         h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:14,flexWrap:'wrap',gap:8}},
           h(Shdr,{title:'DRIP — Reinvestimento de Dividendos',hint:'Estimativa baseada no Dividend Yield actual × nº de acções × preço actual'})
         ),
@@ -8785,9 +8787,9 @@ function DividendosPage({pos,income,qual,sold,cfg}){
               h('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:12}},
                 h('thead',null,h('tr',null,
                   h('th',{className:'text-left'},'Ticker'),
-                  h('th',{className:'text-right'},'Div. Estimado/ano'),
-                  h('th',{className:'text-right'},'Unidades DRIP'),
-                  h('th',null,'Progresso p/ próxima unidade'),
+                  h('th',{className:'text-right'},'Div./ano'),
+                  h('th',{className:'text-right'},'Unid. DRIP'),
+                  h('th',{title:'Progresso para a próxima unidade'},'Próx. unidade'),
                 )),
                 h('tbody',null,
                   dripRows.map(r=>{
@@ -8798,7 +8800,7 @@ function DividendosPage({pos,income,qual,sold,cfg}){
                       h('td',{style:{textAlign:'right',fontWeight:700,color:'var(--gold)',fontFamily:'var(--mono)'}},
                         r.units.toFixed(3)+(r.whole>0?' ('+r.whole+')':'')
                       ),
-                      h('td',{style:{padding:'5px 12px',minWidth:160}},
+                      h('td',{style:{padding:'5px 12px',minWidth:110}},
                         h('div',{style:{display:'flex',alignItems:'center',gap:8}},
                           h('div',{style:{flex:1,height:6,background:'var(--s2)',borderRadius:6,overflow:'hidden'}},
                             h('div',{style:{height:'100%',width:(r.frac*100)+'%',
@@ -8827,6 +8829,7 @@ function DividendosPage({pos,income,qual,sold,cfg}){
             ),
       );
     })(),
+    ), /* end calendar + DRIP */
 
     /* ── Chowder Rule (8/12 colunas) + Desaceleração (4/12 colunas) ── */
     h('div',{className:'split-8-4 mt-4'},
