@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.4';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.5';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1876,6 +1876,24 @@ function priceFreshness(position){
   const when=asOf?`de ${asOf}${age!==null?` (${age} dia${age===1?'':'s'})`:''}`:'sem data';
   return{live:false,title:`Preço não live: ${source}, ${when}.`};
 }
+// Current price for tickers held outside the portfolio (wealth.claudiaInvestimentos,
+// carlitosInvestimentos…): an active position's price if there is one, otherwise
+// cfg.refPrices[ticker] (kept up to date by Config → Cotações online).
+function referencePrice(ticker,pos,cfg){
+  const p=(pos||[]).find(x=>x.t===ticker&&x.cv>0);
+  if(p)return{cv:p.cv,cvAsOf:p.cvAsOf||null,cvSource:p.cvSource||null};
+  const r=cfg?.refPrices?.[ticker];
+  return r&&r.cv>0?{cv:r.cv,cvAsOf:r.asOf||null,cvSource:r.source||null}:null;
+}
+// Tickers held in wealth sections (…Investimentos) that are not active positions.
+function referenceTickers(wealth,pos,cfg){
+  const held=new Set((pos||[]).filter(p=>p.n==null||p.n>0).map(p=>p.t));
+  const out=new Set(Object.keys(cfg?.refPrices||{}));
+  Object.entries(wealth||{}).forEach(([key,section])=>{
+    if(/Investimentos$/.test(key)&&Array.isArray(section?.investimentos))section.investimentos.forEach(r=>{if(r&&r.ticker)out.add(r.ticker);});
+  });
+  return[...out].filter(t=>!held.has(t));
+}
 // Amber dot next to a price that is not live.
 function StaleDot({p}){
   const f=priceFreshness(p);
@@ -2006,10 +2024,9 @@ function PatrimonioPage({wealth,pos,cfg}){
   },0);
 
   /* ── Claudia Investimentos ───────────────────────────────────────────────── */
-  const posMap=buildPosMap(pos);
   const ciItems=(ci?.investimentos||[]);
   const claudiaCurrentTotal=ciItems.reduce((s,r)=>{
-    const cv=posMap[r.ticker]?.cv;
+    const cv=referencePrice(r.ticker,pos,cfg)?.cv;
     const units=r.precoCompra&&r.valorInvestido?r.valorInvestido/r.precoCompra:null;
     return s+(units&&cv?units*cv:r.valorInvestido||0);
   },0);
@@ -2071,9 +2088,8 @@ function PatrimonioPage({wealth,pos,cfg}){
           (wealth?.aforro||[]).forEach(r=>{vals[r.owner]=(vals[r.owner]||0)+(Number(r.investimento)||0)+(r.juros||0);});
           (wealth?.depositos||[]).forEach(r=>{vals[r.investidor]=(vals[r.investidor]||0)+(r.valor||0);});
           (wealth?.juros||[]).forEach(r=>{vals[r.investidor]=(vals[r.investidor]||0)+(r.valor||0);});
-          const posMap2=buildPosMap(pos);
           (wealth?.claudiaInvestimentos?.investimentos||[]).forEach(r=>{
-            const cv=posMap2[r.ticker]?.cv;
+            const cv=referencePrice(r.ticker,pos,cfg)?.cv;
             const units=r.precoCompra&&r.valorInvestido?r.valorInvestido/r.precoCompra:null;
             const val=units&&cv?units*cv:r.valorInvestido||0;
             vals['Claudia']=(vals['Claudia']||0)+val;
@@ -2134,7 +2150,7 @@ function PatrimonioPage({wealth,pos,cfg}){
       aforro.forEach(r=>add(r.owner,'aforro',(Number(r.investimento)||0)+(r.juros||0)));
       juros.forEach(r=>add(r.investidor||r.owner||'Carlos','juros',r.valor||0));
       ciItems.forEach(r=>{
-        const cv=posMap[r.ticker]?.cv;
+        const cv=referencePrice(r.ticker,pos,cfg)?.cv;
         const units=r.precoCompra&&r.valorInvestido?r.valorInvestido/r.precoCompra:null;
         add('Claudia','inv',units&&cv?units*cv:r.valorInvestido||0);
       });
@@ -2345,7 +2361,8 @@ function PatrimonioPage({wealth,pos,cfg}){
         h('table',null,
           TH('Ticker','Data Compra','Duração','Investido','P.Compra','P.Atual','Unidades','Valor Atual','P&L €','P&L %'),
           h('tbody',null,ciItems.map((r,i)=>{
-            const cv=posMap[r.ticker]?.cv??null;
+            const ref=referencePrice(r.ticker,pos,cfg);
+            const cv=ref?.cv??null;
             const units=r.precoCompra&&r.valorInvestido?r.valorInvestido/r.precoCompra:null;
             const currentVal=units&&cv?units*cv:null;
             const pl=currentVal!=null?currentVal-r.valorInvestido:null;
@@ -2357,7 +2374,7 @@ function PatrimonioPage({wealth,pos,cfg}){
               h('td',{className:'mono-sm-gold'},durLabel(r.dataCompra)),
               h('td',{className:'font-mono'},fm(r.valorInvestido)),
               h('td',{className:'mono-sm-muted'},r.precoCompra!=null?'€'+fn(r.precoCompra):'—'),
-              h('td',{className:'font-mono'},cv!=null?'€'+fn(cv):'—'),
+              h('td',{className:'font-mono',title:ref?priceFreshness(ref).title:''},cv!=null?'€'+fn(cv):'—',ref&&h(StaleDot,{p:ref})),
               h('td',{className:'mono-sm-muted'},units!=null?fn(units,2):'—'),
               h('td',{className:'font-mono'},currentVal!=null?fm(currentVal):'—'),
               h('td',{style:{color:plCol}},pl!=null?(pl>=0?'+':'')+fm(pl):'—'),
@@ -4376,7 +4393,7 @@ function App(){
     // ── Sheet 11: Wealth — Claudia Investimentos ──────────────────────────
     const ciHeaders=row('Ticker','Valor Investido','Preço Compra','Data Compra','Curr Price','Valor Actual','P&L','P&L%');
     const ciRows=((wData.claudiaInvestimentos||{}).investimentos||[]).map(r=>{
-      const currPrice=(pos||[]).find(p=>p.t===r.ticker)?.cv;
+      const currPrice=referencePrice(r.ticker,pos,cfg)?.cv;
       const units=r.precoCompra&&r.valorInvestido?r.valorInvestido/r.precoCompra:null;
       const valorActual=units&&currPrice?units*currPrice:null;
       const pl=valorActual!=null?valorActual-r.valorInvestido:null;
@@ -4419,7 +4436,7 @@ function App(){
       // Claudia Investimentos
       if(owner==='Claudia'){
         ((wData.claudiaInvestimentos||{}).investimentos||[]).forEach(r=>{
-          const currPrice=(pos||[]).find(p=>p.t===r.ticker)?.cv;
+          const currPrice=referencePrice(r.ticker,pos,cfg)?.cv;
           const units=r.precoCompra&&r.valorInvestido?r.valorInvestido/r.precoCompra:null;
           const va=units&&currPrice?units*currPrice:r.valorInvestido;
           const pl=va-r.valorInvestido;
@@ -4512,7 +4529,7 @@ function App(){
       tab==='dashboard'&&h(Dash,{pos:safePos,qual:safeQual,income:safeInc,sold:safeSold,cfg,setCfg,wealth}),
       tab==='portfolio'&&h(Port,{pos:safePos,setPos,income:safeInc,qual:safeQual,setQual,cfg,sold:safeSold,setSold}),
       tab==='transactions'&&h(TransactionsPage,{cfg,pos:safePos,setPos,sold:safeSold,setSold,income:safeInc,qual:safeQual,setQual}),
-      tab==='config'&&h(Conf,{cfg,setCfg,pos:safePos,setPos,sold:safeSold,setSold,income:safeInc,qual:safeQual,setQual,onReset:handleReset,exportCSV,importData,exportData,importBrokerQuotes,exportBrokerQuoteTemplate}),
+      tab==='config'&&h(Conf,{wealth,cfg,setCfg,pos:safePos,setPos,sold:safeSold,setSold,income:safeInc,qual:safeQual,setQual,onReset:handleReset,exportCSV,importData,exportData,importBrokerQuotes,exportBrokerQuoteTemplate}),
       tab==='dividendos'&&h(DividendosPage,{pos:safePos,income:safeInc,qual:safeQual,sold:safeSold,cfg}),
       tab==='analytics'&&h(AnalyticsPage,{pos:safePos,qual:safeQual,income:safeInc,sold:safeSold,cfg,wealth}),
       tab==='teses'&&h(TesesPage,{pos:safePos,teses,qual:safeQual}),
@@ -4890,9 +4907,8 @@ function Dash({pos,qual,income,sold,cfg,setCfg,wealth}){
       /* Claudia Folio */
       (()=>{
         const ci=(wealth?.claudiaInvestimentos?.investimentos)||[];
-        const posMap2=Object.fromEntries((pos||[]).map(p=>[p.t,p]));
         const clVal=ci.reduce((s,r)=>{
-          const cv=posMap2[r.ticker]?.cv;
+          const cv=referencePrice(r.ticker,pos,cfg)?.cv;
           const units=r.precoCompra&&r.valorInvestido?r.valorInvestido/r.precoCompra:0;
           return s+(cv&&units?units*cv:r.valorInvestido||0);
         },0);
@@ -5065,9 +5081,8 @@ h('div',{className:'card-sm'},
           const claudiaTotal=(()=>{
             const items=wealth?.claudiaInvestimentos?.investimentos||[];
             if(!items.length)return 0;
-            const pm=buildPosMap(pos);
             return items.reduce((s,r)=>{
-              const cv=pm[r.ticker]?.cv;
+              const cv=referencePrice(r.ticker,pos,cfg)?.cv;
               const units=r.precoCompra&&r.valorInvestido?r.valorInvestido/r.precoCompra:null;
               return s+(units&&cv?units*cv:r.valorInvestido||0);
             },0);
@@ -5700,7 +5715,7 @@ function BrokerSelect({value,list,onChange,style}){
 }
 // ── Cotações online: test every ticker against a provider (plus an optional fallback
 // for the tickers it can't price), then apply the ones you confirm ──
-function PricePanel({cfg,setCfg,pos,setPos}){
+function PricePanel({cfg,setCfg,pos,setPos,wealth}){
   const[provider,setProvider]=useState(cfg?.priceProvider&&PRICE_PROVIDERS[cfg.priceProvider]?cfg.priceProvider:'twelvedata');
   const[fallback,setFallback]=useState(cfg?.priceFallback===''?'':(cfg?.priceFallback&&PRICE_PROVIDERS[cfg.priceFallback]?cfg.priceFallback:'alphavantage'));
   const[keys,setKeys]=useState(()=>Object.fromEntries(Object.keys(PRICE_PROVIDERS).map(id=>[id,readPriceKey(id)])));
@@ -5718,7 +5733,10 @@ function PricePanel({cfg,setCfg,pos,setPos}){
     return()=>window.removeEventListener('price-keys-changed',refresh);
   },[]);
   const fb=fallback&&fallback!==provider?fallback:'';
-  const active=(pos||[]).filter(p=>(p.n==null||p.n>0)&&p.t);
+  // Active positions plus reference tickers (e.g. VWCE.DE in Claudia Investimentos),
+  // whose price is stored in cfg.refPrices instead of a position. They are in EUR.
+  const active=[...(pos||[]).filter(p=>(p.n==null||p.n>0)&&p.t),
+    ...referenceTickers(wealth,pos,cfg).map(t=>({t,cat:'EUR',cv:cfg?.refPrices?.[t]?.cv||null,ref:true}))];
   const symbolFor=p=>(cfg?.priceSymbols&&cfg.priceSymbols[p.t])||defaultPriceSymbol(p);
   const setKey=(id,value)=>{const v=value.trim();setKeys(k=>({...k,[id]:v}));writePriceKey(id,v);};
   const changeProvider=id=>{setProvider(id);setRows([]);setMessage('');setCfg({...cfg,priceProvider:id});};
@@ -5732,7 +5750,7 @@ function PricePanel({cfg,setCfg,pos,setPos}){
   const run=async()=>{
     if(!keys[provider]){setMessage('Falta a chave da API de '+PRICE_PROVIDERS[provider].name+'.');return;}
     cancel.current=false;setRunning(true);setMessage('A obter taxas de câmbio do BCE…');
-    const next=active.map(p=>({t:p.t,symbol:symbolFor(p),target:positionCurrency(p),current:p.cv,status:'pending'}));
+    const next=active.map(p=>({t:p.t,ref:!!p.ref,symbol:symbolFor(p),target:positionCurrency(p),current:p.cv,status:'pending'}));
     setRows([...next]);
     let rates=null;
     try{rates=(await fetchEcbRates()).rates;}
@@ -5783,16 +5801,18 @@ function PricePanel({cfg,setCfg,pos,setPos}){
   };
   const toApply=rows.filter(r=>r.status==='ok'&&r.apply);
   const apply=()=>{
-    const byTicker=new Map(toApply.map(r=>[r.t,r]));
+    const byTicker=new Map(toApply.filter(r=>!r.ref).map(r=>[r.t,r]));
     const today=new Date().toISOString().slice(0,10);
     setPos(prev=>prev.map(p=>{
       const r=byTicker.get(p.t);
       return r?{...p,cv:Math.round(r.price*10000)/10000,cvAsOf:r.date||today,cvSource:PRICE_PROVIDERS[r.via].name}:p;
     }));
+    const refPrices={...(cfg?.refPrices||{})};
+    toApply.filter(r=>r.ref).forEach(r=>{refPrices[r.t]={cv:Math.round(r.price*10000)/10000,asOf:r.date||today,source:PRICE_PROVIDERS[r.via].name};});
     const sources=[...new Set(toApply.map(r=>PRICE_PROVIDERS[r.via].name))].join(' + ');
-    setCfg({...cfg,priceProvider:provider,priceFallback:fallback,quotesImportedAt:new Date().toISOString(),quotesSource:sources});
+    setCfg({...cfg,refPrices,priceProvider:provider,priceFallback:fallback,quotesImportedAt:new Date().toISOString(),quotesSource:sources});
     setMessage(`${toApply.length} cotações aplicadas.`);
-    setRows(rows.map(r=>byTicker.has(r.t)?{...r,status:'applied',apply:false}:r));
+    setRows(rows.map(r=>r.status==='ok'&&r.apply?{...r,status:'applied',apply:false}:r));
   };
   const fmt=(v,d=2)=>Number.isFinite(v)?v.toFixed(d):'—';
   const cell={padding:'4px 6px',fontSize:10,borderBottom:'1px solid var(--border)',whiteSpace:'nowrap'};
@@ -5832,7 +5852,7 @@ function PricePanel({cfg,setCfg,pos,setPos}){
           return h('tr',{key:r.t},
             h('td',{style:cell},h('input',{type:'checkbox',checked:!!r.apply,disabled:r.status!=='ok'||running,
               onChange:e=>setRows(rows.map((x,j)=>j===i?{...x,apply:e.target.checked}:x))})),
-            h('td',{style:{...cell,fontWeight:700}},r.t),
+            h('td',{style:{...cell,fontWeight:700},title:r.ref?'Fora da carteira (ex.: Claudia Investimentos): o preço é guardado em refPrices':''},r.t,r.ref&&h('span',{style:{fontWeight:400,color:'var(--muted)',marginLeft:4}},'(ref.)')),
             h('td',{style:cell},h('input',{className:'ed',style:{width:84,fontSize:10},defaultValue:r.symbol,disabled:running,key:r.t+r.symbol,
               title:'Formato: TICKER ou TICKER.BOLSA ('+Object.keys(PRICE_EXCHANGES).filter(k=>k!=='US').join(', ')+')',
               onBlur:e=>{if(p&&e.target.value.trim().toUpperCase()!==r.symbol){changeSymbol(p,e.target.value);setRows(rows.map((x,j)=>j===i?{...x,symbol:e.target.value.trim().toUpperCase()||defaultPriceSymbol(p),status:'pending',apply:false}:x));}}})),
@@ -5852,7 +5872,7 @@ function PricePanel({cfg,setCfg,pos,setPos}){
   );
 }
 
-function Conf({cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onReset,exportCSV,importData,exportData,importBrokerQuotes,exportBrokerQuoteTemplate}){
+function Conf({wealth,cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onReset,exportCSV,importData,exportData,importBrokerQuotes,exportBrokerQuoteTemplate}){
   const[confTab,setConfTab]=useState('config');
   const[fxStatus,setFxStatus]=useState(null);
   const updateFxFromEcb=async()=>{
@@ -5897,7 +5917,7 @@ function Conf({cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onReset,ex
         )
       ),
 
-      h(PricePanel,{cfg,setCfg,pos,setPos}),
+      h(PricePanel,{cfg,setCfg,pos,setPos,wealth}),
 
       h('div',{className:'input-row'},
         MicroLabel('Cotações locais — CSV do broker',{size:9,mb:8}),

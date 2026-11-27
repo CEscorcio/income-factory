@@ -126,6 +126,7 @@ real(y)   = nominal(y) / (1+inflation)^y
   - **Cotações online** (Config): Twelve Data for US listings, Alpha Vantage as fallback for London, Xetra, Frankfurt, Amsterdam and Lisbon. Prices are converted to the position currency with ECB rates and reviewed before applying.
   - **Broker CSV** (Config): template download + import.
   - **By hand** in the Transactions page.
+- **Investments outside the portfolio** (Claudia Investimentos): their current price comes from an active position with the same ticker, otherwise from `cfg.refPrices`. Cotações online also fetches these tickers (marked "(ref.)") and stores the price there.
 - **Live vs not live**: a price is live when it came from an online provider and is at most 4 days old (`cvSource`, `cvAsOf`). Every other price shows an amber ● in Holdings and Transactions; hover it to see the source and date.
 - **EUR/USD**: the **BCE** button fetches the European Central Bank reference rate (no key) and adds the day to `fxHistory`.
 - **Brokers**: configured per transaction via the optional `broker` field; the Analytics "Corretora" pie shows shares per broker.
