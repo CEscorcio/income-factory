@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.28';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.29';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1660,7 +1660,8 @@ function readLegacyPortfolio(data){
   return{positions:active,sold:[...soldBuilt,...explicitSold]};
 }
 const WEALTH_KEYS=['ppr','aforro','depositos','juros','claudiaInvestimentos','carlitosInvestimentos'];
-// An old teses.json is an object of theses; each one has at least one of these sections.
+// An old teses.json is an object of theses; each one has at least one of these sections
+// ('business' is no longer shown but still identifies older files).
 const THESIS_FIELDS=['name','meta','thesis','business','moat','dividends','financials','keyPhrase','finalDecision','swot'];
 function looksLikeThesis(entry){return hasAnyKey(entry,THESIS_FIELDS);}
 function hasAnyKey(obj,keys){return keys.some(key=>Object.prototype.hasOwnProperty.call(obj,key));}
@@ -9361,52 +9362,47 @@ function TesesPage({pos,teses,qual}){
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'2. O Negócio'}),
-        h('p',{style:{fontSize:13,lineHeight:1.6,marginTop:8,whiteSpace:'pre-wrap'}},t.business||'Por preencher.')
-      ),
-
-      h('div',{className:'card mb-4'},
-        h(Shdr,{title:'3. Moat / Vantagem Competitiva',hint:t.moat?.rating!=null?('Moat: '+convStars(t.moat.rating)):null}),
+        h(Shdr,{title:'2. Moat / Vantagem Competitiva',hint:t.moat?.rating!=null?('Moat: '+convStars(t.moat.rating)):null}),
         h('div',{style:{marginTop:8}},TesesList(t.moat?.points))
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'4. Principal Risco'}),
+        h(Shdr,{title:'3. Principal Risco'}),
         h('p',{style:{fontSize:13,lineHeight:1.6,marginTop:8,whiteSpace:'pre-wrap'}},t.mainRisk||'Por preencher.')
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'5. Resposta Estratégica'}),
+        h(Shdr,{title:'4. Resposta Estratégica'}),
         h('div',{style:{marginTop:8}},TesesList(t.strategicResponse))
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'6. Balance Sheet'}),
+        h(Shdr,{title:'5. Balance Sheet'}),
         h('p',{style:{fontSize:13,lineHeight:1.6,marginTop:8,whiteSpace:'pre-wrap'}},t.balanceSheet||'Por preencher.')
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'7. Growth Thesis'}),
+        h(Shdr,{title:'6. Growth Thesis'}),
         h('p',{style:{fontSize:13,lineHeight:1.6,marginTop:8,whiteSpace:'pre-wrap'}},t.growthThesis||'Por preencher.')
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'8. Bear Case'}),
+        h(Shdr,{title:'7. Bear Case'}),
         h('div',{style:{marginTop:8}},TesesList(t.bearCase,'var(--red)'))
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'9. O Que Destruiria a Tese?'}),
+        h(Shdr,{title:'8. O Que Destruiria a Tese?'}),
         h('div',{style:{marginTop:8}},TesesList(t.whatWouldBreakThesis,'var(--red)'))
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'10. Valuation'}),
+        h(Shdr,{title:'9. Valuation'}),
         TesesTable(['Cenário','EPS','P/E','Fair Value'],(t.valuation||[]).map(r=>[r.scenario,r.eps,r.pe,r.fairValue]))
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'11. Decisão Final'}),
+        h(Shdr,{title:'10. Decisão Final'}),
         h('div',{style:{marginTop:8}},
           TesesRow('Rating',t.finalDecision?.rating),
           TesesRow('Fair value',t.finalDecision?.fairValue),
