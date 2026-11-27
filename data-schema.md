@@ -135,6 +135,9 @@ Keys written by the price and exchange-rate updates:
 | `priceSymbols` | `{ "<ticker>": "<symbol>" }` overrides for tickers the provider knows by another symbol, e.g. `{ "LGEN": "LGEN.L" }`. Format `TICKER` (US) or `TICKER.EXCHANGE` with `L`, `AS`, `LS`, `MI`, `DE`, `F`, `BE`, `PA`, `MC`, `CO`. |
 | `quotesImportedAt`, `quotesSource` | When prices were last updated, and from where. |
 | `refPrices` | `{ "<ticker>": { "cv": number, "asOf": date, "source": string } }`: prices for tickers held outside the portfolio (e.g. VWCE.DE in `wealth.claudiaInvestimentos`), in EUR. Used when no active position has that ticker; updated by Cotações online. |
+| `fxHistory` | `{ unit, source, asOf, rates: { "YYYY-MM-DD": USD per 1 EUR } }`. Filled by the **BCE** button with ECB reference rates from the first transaction to today. The Tax page converts each sale at its date and each lot's cost at its purchase date; dividends at the year's average rate. |
+| `benchmarkCache` | `{ sp500:{byYear,source}, msciWorld:{byYear,source}, asOf }`. Yearly total returns (`"2026 YTD"` for the current year). **Actualizar (SPY, URTH)** computes them from Alpha Vantage monthly adjusted closes. |
+| `dividendEvents` | `{ "<ticker>": { fetchedAt, events:[ { ex, pay, amount } ] } }`: real dividend dates and amount per share (US listings, Alpha Vantage). Used by the monthly dividend map and the dividend calendar; refreshed with **Actualizar datas** on the Dividends page. |
 
 API keys are **not** part of `config`. They live in the browser and go into the file only in the optional `secrets` section below.
 

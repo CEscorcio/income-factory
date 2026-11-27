@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.17';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.19';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -935,7 +935,8 @@ function incomeByYear(income,ticker){
   const exactKey=income.__tickerLookup?.[normTicker(ticker||'').toUpperCase()];
   return exactKey?income[exactKey]:null;
 }
-function buildDividendCalendarData(positions,qualMap,fxRate){
+function buildDividendCalendarData(positions,qualMap,fxRate,dividendEvents){
+  const today=new Date().toISOString().slice(0,10);
   const months=[
     {name:'Jan',tickers:[]},{name:'Fev',tickers:[]},{name:'Mar',tickers:[]},
     {name:'Abr',tickers:[]},{name:'Mai',tickers:[]},{name:'Jun',tickers:[]},
@@ -952,7 +953,8 @@ function buildDividendCalendarData(positions,qualMap,fxRate){
     const isUSD=position.cat==='USD';
     const annualPositionEUR=isUSD?annualLocal/(fxRate||1.08):annualLocal;
     annualEUR+=annualPositionEUR;
-    const paymentMonths=[...new Set((position.divMonths||[]).filter(month=>Number.isInteger(month)&&month>=1&&month<=12))];
+    // Real payment months from the dividend dates when known, else divMonths.
+    const paymentMonths=paymentMonthsFor(position,dividendEvents?.[position.t]?.events,today);
     if(!paymentMonths.length){
       unassigned.push({ticker:position.t,annualEUR:annualPositionEUR});
       return;
@@ -1233,39 +1235,52 @@ function cgRateForHoldingBase(years,fallbackRate){
   }
   return fallbackRate??0.28;
 }
+// fxRate: a number (one rate for everything) or a function date→rate (USD per EUR).
+// With a function, each USD amount is converted at its own date, as the Portuguese
+// IRS requires: proceeds at the sale date, each lot's cost at its purchase date.
 function buildCapitalGainsEvents(pos,sold,fxRate,taxRate){
   const events=[];
+  const fxOn=typeof fxRate==='function'?fxRate:()=>fxRate||1.08;
   const addSale=(position,sale,source)=>{
     const shareCount=sale.n||0;
     if(shareCount<=0||!sale.date)return;
+    const isUSD=position.cat==='USD';
+    const toEur=(v,date)=>isUSD?v/fxOn(date):v;
     const fallbackBuyDate=position.transactions?.find(tx=>tx.type==='buy')?.date||position.entry;
     let weightedYears=0,positiveGain=0,taxPotential=0;
+    let positiveGainEur=0,taxPotentialEur=0,costEur=0;
+    const proceedsEur=toEur(sale.proceeds,sale.date);
     const lots=sale.lots||[];
     if(lots.length){
       lots.forEach(lot=>{
         const years=calcHoldingYears(lot.date,sale.date)??0;
+        const rateY=cgRateForHoldingBase(years,taxRate);
         weightedYears+=(lot.n/shareCount)*years;
         const lotProceeds=sale.proceeds*(lot.n/shareCount);
         const lotGain=lotProceeds-lot.n*lot.price;
-        if(lotGain>0){
-          positiveGain+=lotGain;
-          taxPotential+=lotGain*cgRateForHoldingBase(years,taxRate);
-        }
+        if(lotGain>0){positiveGain+=lotGain;taxPotential+=lotGain*rateY;}
+        const lotCostEur=toEur(lot.n*lot.price,lot.date||fallbackBuyDate);
+        costEur+=lotCostEur;
+        const lotGainEur=proceedsEur*(lot.n/shareCount)-lotCostEur;
+        if(lotGainEur>0){positiveGainEur+=lotGainEur;taxPotentialEur+=lotGainEur*rateY;}
       });
     }else{
       weightedYears=calcHoldingYears(fallbackBuyDate,sale.date)??0;
       positiveGain=Math.max(0,sale.realPL);
       taxPotential=positiveGain*cgRateForHoldingBase(weightedYears,taxRate);
+      costEur=toEur(sale.costBasis,fallbackBuyDate);
+      positiveGainEur=Math.max(0,proceedsEur-costEur);
+      taxPotentialEur=positiveGainEur*cgRateForHoldingBase(weightedYears,taxRate);
     }
-    const conversion=position.cat==='USD'?1/(fxRate||1.08):1;
-    const rate=positiveGain>0?taxPotential/positiveGain:cgRateForHoldingBase(weightedYears,taxRate);
+    const rate=positiveGainEur>0?taxPotentialEur/positiveGainEur:positiveGain>0?taxPotential/positiveGain:cgRateForHoldingBase(weightedYears,taxRate);
     events.push({
       ticker:position.t,name:position.name||position.t,date:sale.date,
       buyDate:lots.length>1?'':lots[0]?.date||fallbackBuyDate,
       n:shareCount,sellPrice:sale.price,avgBuyPrice:sale.costBasis/shareCount,
       proceeds:sale.proceeds,costBasis:sale.costBasis,pl:sale.realPL,
-      plEur:sale.realPL*conversion,positiveGainEur:positiveGain*conversion,
-      taxPotentialEur:taxPotential*conversion,taxEur:0,rate,yrs:weightedYears,
+      proceedsEur,costEur,feeEur:toEur(sale.fee||0,sale.date),fxSale:isUSD?fxOn(sale.date):1,
+      plEur:proceedsEur-costEur,positiveGainEur,
+      taxPotentialEur,taxEur:0,rate,yrs:weightedYears,
       sym:currencySymbol(position.cat),fee:sale.fee||0,fifoLots:lots,source
     });
   };
@@ -1778,6 +1793,49 @@ async function fetchEcbRates(){
   }
   throw new Error('Não foi possível obter as taxas do BCE ('+(lastError?.message||'sem rede')+').');
 }
+// Daily EUR/USD history (cfg.fxHistory.rates: { "YYYY-MM-DD": USD per 1 EUR }).
+// on(date): rate of that day or the last one before it (weekends, holidays);
+// avg('YYYY' | 'YYYY-MM'): average of the period. Falls back to cfg.fxEurUsd.
+function makeFxLookup(cfg){
+  const rates=cfg?.fxHistory?.rates||{};
+  const dates=Object.keys(rates).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)&&rates[d]>0).sort();
+  const fallback=cfg?.fxEurUsd||1.08;
+  const on=date=>{
+    if(!date||!dates.length)return fallback;
+    let lo=0,hi=dates.length-1,ans=-1;
+    while(lo<=hi){const m=(lo+hi)>>1;if(dates[m]<=date){ans=m;lo=m+1;}else hi=m-1;}
+    return ans>=0?rates[dates[ans]]:rates[dates[0]];
+  };
+  const cache={};
+  const avg=period=>{
+    if(cache[period]!=null)return cache[period];
+    const vs=dates.filter(d=>d.startsWith(period)).map(d=>rates[d]);
+    return cache[period]=vs.length?vs.reduce((a,b)=>a+b,0)/vs.length:on(period.length===4?period+'-12-31':period+'-31');
+  };
+  return{on,avg,fallback,count:dates.length,from:dates[0]||null,to:dates[dates.length-1]||null};
+}
+// All ECB EUR/USD reference rates from `start` (YYYY-MM-DD) to today, as { date: rate }.
+async function fetchEcbHistory(start){
+  const urls=[`https://api.frankfurter.dev/v1/${start}..?base=EUR&symbols=USD`,`https://api.frankfurter.app/${start}..?from=EUR&to=USD`];
+  let lastError=null;
+  for(const url of urls){
+    try{
+      const res=await fetch(url);
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      const json=await res.json();
+      const out={};
+      Object.entries(json?.rates||{}).forEach(([d,r])=>{if(/^\d{4}-\d{2}-\d{2}$/.test(d)&&Number.isFinite(r?.USD))out[d]=r.USD;});
+      if(!Object.keys(out).length)throw new Error('sem dados');
+      return out;
+    }catch(error){lastError=error;}
+  }
+  throw new Error('Não foi possível obter o histórico do BCE ('+(lastError?.message||'sem rede')+').');
+}
+// First date the app needs a rate for: earliest transaction, or 2019-01-01.
+function earliestDataDate(pos,sold){
+  const ds=[...(pos||[]),...(sold||[])].flatMap(p=>(p.transactions||[]).map(t=>t.date)).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d||'')).sort();
+  return ds[0]||'2019-01-01';
+}
 // Exchanges, keyed by the Yahoo-style suffix used in tickers (NN.AS, COR.LS, ...).
 // mic = ISO market code (Twelve Data), av = Alpha Vantage suffix.
 // (EODHD was tried and left out: it does not allow requests from a browser.)
@@ -1927,6 +1985,33 @@ function StaleDot({p}){
   if(f.live)return null;
   return h('span',{title:f.title,'aria-label':f.title,style:{color:'var(--gold)',marginLeft:4,cursor:'help',fontSize:10}},'●');
 }
+// ── Benchmarks from Alpha Vantage monthly adjusted closes (dividends reinvested) ──
+// S&P 500 ≈ SPY, MSCI World ≈ URTH (both US-listed ETFs, so after their small fees).
+const BENCHMARKS=[{key:'sp500',symbol:'SPY',label:'S&P 500'},{key:'msciWorld',symbol:'URTH',label:'MSCI World'}];
+async function fetchMonthlyAdjusted(symbol,key){
+  const res=await fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_MONTHLY_ADJUSTED&symbol=${enc(symbol)}&apikey=${enc(key)}`);
+  if(!res.ok)throw new Error('HTTP '+res.status);
+  const json=await res.json();
+  const info=json.Note||json.Information||json['Error Message'];
+  if(info)throw new Error(maskKey(/rate limit|requests per/i.test(info)?RATE_LIMIT_MESSAGE:String(info).slice(0,100),key));
+  const ts=json['Monthly Adjusted Time Series'];
+  if(!ts)throw new Error('Resposta sem série mensal para '+symbol+'.');
+  return Object.entries(ts).map(([date,v])=>({date,adj:parseFloat(v['5. adjusted close'])}))
+    .filter(x=>Number.isFinite(x.adj)&&x.adj>0).sort((a,b)=>a.date.localeCompare(b.date));
+}
+// Calendar-year total returns from month-end adjusted closes; the current year is "YYYY YTD".
+function yearlyReturns(series,startYear){
+  const lastOf=y=>{const pts=series.filter(x=>x.date.startsWith(String(y)));return pts.length?pts[pts.length-1]:null;};
+  const last=series[series.length-1];
+  const lastYear=parseInt(last.date.slice(0,4));
+  const out={};
+  for(let y=startYear;y<=lastYear;y++){
+    const prev=lastOf(y-1),cur=lastOf(y);
+    if(!prev||!cur)continue;
+    out[y===CUR_YEAR?y+' YTD':String(y)]=Math.round((cur.adj/prev.adj-1)*10000)/10000;
+  }
+  return{byYear:out,asOf:last.date};
+}
 // The API key is kept only in this browser: never in the data file, the config or the code.
 const PRICE_KEY_PREFIX='if_pricekey_';
 function readPriceKey(provider){try{return localStorage.getItem(PRICE_KEY_PREFIX+provider)||'';}catch(e){return'';}}
@@ -1961,6 +2046,204 @@ async function fetchQuoteRaw(providerId,symbol,key){
   const quote=provider.parse(json||{});
   if(!Number.isFinite(quote.price)||quote.price<=0)throw new Error('Preço inválido.');
   return{...quote,currency:quote.currency||s.exchange.currency};
+}
+
+// ── Dividend events (Alpha Vantage DIVIDENDS) ───────────────────────────────
+// cfg.dividendEvents = { TICKER: { fetchedAt, events:[{ex,pay,amount}] } }, amount per share
+// in the listing currency. Only US listings are covered by the free plan.
+const DIV_EVENTS_SINCE='2019-01-01';
+async function fetchDividendEvents(symbol,key){
+  const res=await fetch(`https://www.alphavantage.co/query?function=DIVIDENDS&symbol=${enc(symbol)}&apikey=${enc(key)}`);
+  if(!res.ok)throw new Error('HTTP '+res.status);
+  const json=await res.json();
+  const info=json.Note||json.Information||json['Error Message'];
+  if(info)throw new Error(maskKey(/rate limit|requests per/i.test(info)?RATE_LIMIT_MESSAGE:String(info).slice(0,100),key));
+  const iso=v=>/^\d{4}-\d{2}-\d{2}$/.test(v||'')?v:null;
+  return(json.data||[]).map(e=>({ex:iso(e.ex_dividend_date),pay:iso(e.payment_date),amount:parseFloat(e.amount)}))
+    .filter(e=>e.ex&&e.ex>=DIV_EVENTS_SINCE&&Number.isFinite(e.amount)&&e.amount>0)
+    .sort((a,b)=>a.ex.localeCompare(b.ex));
+}
+// Shares held at the start of `date` (bought before it, minus sells before it).
+function sharesHeldBefore(p,date){
+  const txs=p.transactions||[];
+  if(!txs.length)return p.n||0;
+  return Math.max(0,txs.filter(t=>t.date<date).reduce((s,t)=>s+(t.type==='buy'?t.n:-t.n),0));
+}
+const payDate=e=>e.pay||e.ex;
+// Payment months seen in the 12 months up to `date`, from the events (or divMonths).
+function paymentMonthsFor(p,events,date){
+  if(events&&events.length){
+    const from=String(parseInt(date.slice(0,4))-1)+date.slice(4);
+    const ms=[...new Set(events.filter(e=>payDate(e)>from&&payDate(e)<=date).map(e=>parseInt(payDate(e).slice(5,7))))];
+    if(ms.length)return ms.sort((a,b)=>a-b);
+  }
+  return[...new Set((p.divMonths||[]).filter(m=>Number.isInteger(m)&&m>=1&&m<=12))].sort((a,b)=>a-b);
+}
+// Monthly dividend map in EUR, one row per year from `startYear`, plus next year's projection.
+// Past months: the dividends recorded per year (divByYear) spread over the months they were
+// paid — by real payment dates (shares held × amount) when known, else over divMonths.
+// Future months: estimate = yield × shares × price, on declared or usual payment months.
+function buildDividendMonthMap({pos,sold,qualMap,cfg,growth,startYear,only}){
+  const fxL=makeFxLookup(cfg);
+  const evMap=cfg?.dividendEvents||{};
+  const today=new Date().toISOString().slice(0,10);
+  const curMonth=parseInt(today.slice(5,7));
+  const years=[];for(let y=startYear;y<=CUR_YEAR+1;y++)years.push(y);
+  const grid=Object.fromEntries(years.map(y=>[y,Array.from({length:12},()=>({eur:0,projected:false,items:{}}))]));
+  const noDates=new Set();
+  const add=(y,m,t,eur,projected)=>{
+    if(!(eur>0)||!grid[y])return;
+    const c=grid[y][m-1];c.eur+=eur;c.items[t]=(c.items[t]||0)+eur;if(projected)c.projected=true;
+  };
+  const all=[...(pos||[]).map(p=>({p,active:(p.n==null||p.n>0)})),...(sold||[]).map(p=>({p,active:false}))]
+    .filter(x=>!only||only.has(x.p.t));
+  all.forEach(({p,active})=>{
+    const isUSD=p.cat==='USD';
+    const events=evMap[p.t]?.events||null;
+    const toEurOn=(v,ym)=>isUSD?v/fxL.avg(ym):v;
+    // Recorded dividends, spread over the months they were paid.
+    years.filter(y=>y<=CUR_YEAR).forEach(y=>{
+      const total=p.divByYear?.[y]||p.divByYear?.[String(y)]||0;
+      if(!(total>0))return;
+      const lastMonth=y===CUR_YEAR?curMonth:12;
+      const w=Array(13).fill(0);
+      (events||[]).forEach(e=>{
+        const d=payDate(e);
+        if(!d.startsWith(String(y))||d>today)return;
+        const m=parseInt(d.slice(5,7));if(m>lastMonth)return;
+        w[m]+=sharesHeldBefore(p,e.ex)*e.amount;
+      });
+      let sum=w.reduce((a,b)=>a+b,0);
+      if(!(sum>0)){
+        const ms=(p.divMonths||[]).filter(m=>Number.isInteger(m)&&m>=1&&m<=lastMonth);
+        if(ms.length)ms.forEach(m=>{w[m]=1;});else{noDates.add(p.t);for(let m=1;m<=lastMonth;m++)w[m]=1;}
+        sum=w.reduce((a,b)=>a+b,0);
+      }
+      for(let m=1;m<=12;m++)if(w[m]>0)add(y,m,p.t,toEurOn(total*w[m]/sum,y+'-'+String(m).padStart(2,'0')),false);
+    });
+    if(!active)return;
+    const est=positionEstAnnual(p,qualMap);
+    if(!est)return;
+    const fxNow=isUSD?(cfg?.fxEurUsd||1.08):1;
+    const months=paymentMonthsFor(p,events,today);
+    if(!months.length){noDates.add(p.t);return;}
+    const perPayment=est/months.length;
+    // Rest of this year: declared payments (amount × shares now), else the usual months.
+    const declared=(events||[]).filter(e=>payDate(e)>today&&payDate(e).startsWith(String(CUR_YEAR)));
+    const declaredMonths=new Set(declared.map(e=>parseInt(payDate(e).slice(5,7))));
+    declared.forEach(e=>add(CUR_YEAR,parseInt(payDate(e).slice(5,7)),p.t,e.amount*(p.n||0)/fxNow,true));
+    months.filter(m=>m>curMonth&&!declaredMonths.has(m)).forEach(m=>add(CUR_YEAR,m,p.t,perPayment/fxNow,true));
+    // Next year: the annual estimate grown by divGrowth, on the usual months.
+    months.forEach(m=>add(CUR_YEAR+1,m,p.t,perPayment*growth/fxNow,true));
+  });
+  const rows=years.map(y=>{
+    const cells=grid[y].map(c=>({...c,items:Object.entries(c.items).sort((a,b)=>b[1]-a[1])}));
+    return{year:y,cells,total:cells.reduce((s,c)=>s+c.eur,0),kind:y>CUR_YEAR?'projection':y===CUR_YEAR?'current':'actual'};
+  });
+  const maxActual=Math.max(1,...rows.flatMap(r=>r.cells.filter(c=>!c.projected).map(c=>c.eur)));
+  const maxProj=Math.max(1,...rows.flatMap(r=>r.cells.filter(c=>c.projected).map(c=>c.eur)));
+  return{rows,maxActual,maxProj,noDates:[...noDates].sort()};
+}
+const MONTHS_PT=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+function DividendHeatmap({pos,sold,qualMap,cfg,setCfg,growth,selected,clearSelected}){
+  const firstYear=Math.min(CUR_YEAR,...[...(pos||[]),...(sold||[])].flatMap(p=>Object.keys(p.divByYear||{}).map(Number)).filter(Number.isFinite));
+  const[startYear,setStartYear]=useState(Math.max(firstYear,CUR_YEAR-3));
+  const[status,setStatus]=useState(null);
+  const cancel=useRef(false);
+  useEffect(()=>()=>{cancel.current=true;},[]);
+  const only=selected&&selected.size?selected:null;
+  const map=useMemo(()=>buildDividendMonthMap({pos,sold,qualMap,cfg,growth,startYear,only}),[pos,sold,qualMap,cfg,growth,startYear,only]);
+  // US tickers (active, then sold with dividends) whose dates are missing or stale.
+  const toFetch=()=>{
+    const today=new Date();
+    const stale=(t,days)=>{const f=cfg?.dividendEvents?.[t]?.fetchedAt;return!f||(today-new Date(f))/86400000>days;};
+    const isUS=p=>p.cat==='USD'&&parsePriceSymbol((cfg?.priceSymbols||{})[p.t]||defaultPriceSymbol(p)).code==='US';
+    const act=(pos||[]).filter(p=>(p.n==null||p.n>0)&&isUS(p)&&stale(p.t,30)).map(p=>p.t);
+    const old=(sold||[]).filter(p=>isUS(p)&&Object.keys(p.divByYear||{}).some(y=>+y>=startYear)&&stale(p.t,180)).map(p=>p.t);
+    return[...new Set([...act,...old])];
+  };
+  const refresh=async()=>{
+    const key=readPriceKey('alphavantage');
+    if(!key){setStatus({error:true,text:'Falta a chave do Alpha Vantage (Config → Cotações online).'});return;}
+    const list=toFetch().slice(0,20);
+    if(!list.length){setStatus({text:'Datas já actualizadas.'});return;}
+    cancel.current=false;
+    const got={};let done=0,errorMsg=null;
+    for(let i=0;i<list.length&&!cancel.current;i++){
+      const t=list[i];
+      if(i>0)await new Promise(r=>setTimeout(r,13000));
+      if(cancel.current)break;
+      setStatus({loading:true,text:`A obter datas de ${t} (${i+1}/${list.length})…`});
+      try{got[t]={fetchedAt:new Date().toISOString().slice(0,10),events:await fetchDividendEvents(t,key)};done++;}
+      catch(e){errorMsg=e.message;if(e.message===RATE_LIMIT_MESSAGE)break;}
+    }
+    if(done)setCfg(c=>({...c,dividendEvents:{...(c?.dividendEvents||{}),...got}}));
+    const left=Math.max(0,toFetch().length-done);
+    const limited=errorMsg===RATE_LIMIT_MESSAGE;
+    setStatus({error:!!errorMsg&&!done,text:`${done} tickers actualizados.`+
+      (left>0?(limited?` Faltam ${left}: o Alpha Vantage atingiu o limite diário, tenta amanhã.`:` Faltam ${left}: carrega outra vez (máx. 20 por vez; o plano grátis permite 25 pedidos por dia).`):'')+
+      (errorMsg&&!limited?' '+errorMsg:'')});
+  };
+  const eur=v=>'€'+(v>=100?Math.round(v).toLocaleString('pt-PT'):fn(v,0));
+  const shade=(v,max,proj)=>{
+    const r=Math.min(1,v/max),steps=[.18,.32,.48,.66,.85,1];
+    const a=steps[Math.min(5,Math.floor(r*6))];
+    return proj?`rgba(59,130,246,${a*0.75})`:`rgba(16,185,129,${a*0.7})`;
+  };
+  const yearOpts=[];for(let y=firstYear;y<=CUR_YEAR;y++)yearOpts.push(y);
+  const cellStyle={height:22,borderRadius:4,fontSize:10,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'var(--mono)'};
+  const legend=(max,proj)=>h('span',{style:{display:'inline-flex',alignItems:'center',gap:3}},
+    '€0',[.1,.3,.5,.7,.9,1].map(r=>h('span',{key:r,style:{width:12,height:8,borderRadius:2,background:shade(r*max,max,proj),border:proj?'1px dashed rgba(96,165,250,.7)':'none'}})),
+    '+'+eur(max));
+  const evCount=Object.keys(cfg?.dividendEvents||{}).length;
+  return h('div',{className:'card mb-4'},
+    h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10,marginBottom:10}},
+      h('div',{style:{display:'flex',alignItems:'center',gap:8}},
+        h('span',{className:'font-bold text-[13px] tracking-[.06em] uppercase text-slate-200'},'Mapa de rendimento: dividendos por mês'),
+        h(InfoTooltip,{text:'Dividendos recebidos por mês, em euros (USD ao câmbio médio do BCE do mês). O total de cada ano é o que registaste; a distribuição pelos meses usa as datas reais de pagamento (Alpha Vantage, acções dos EUA) ou os meses de pagamento da posição. A azul: projecção (yield × posições × preço; '+(CUR_YEAR+1)+' com o crescimento do dividendo de Config).'})
+      ),
+      h('div',{style:{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}},
+        h('button',{className:'btn-secondary ml-0',style:{fontSize:10,padding:'5px 10px'},disabled:status&&status.loading,onClick:refresh,
+          title:'Datas de pagamento e valores por acção das acções dos EUA (até 20 tickers por vez)'},status&&status.loading?'…':'Actualizar datas'),
+        h('span',{style:{fontSize:10,fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--muted)'}},'Ver a partir de'),
+        h('select',{className:'ed',value:startYear,onChange:e=>setStartYear(+e.target.value),style:{fontSize:12,fontWeight:700}},
+          yearOpts.map(y=>h('option',{key:y,value:y},y)))
+      )
+    ),
+    status&&h('div',{style:{fontSize:10,color:status.error?'var(--red)':'var(--muted)',marginBottom:8}},status.text),
+    only&&h('div',{style:{fontSize:10,color:'var(--muted)',marginBottom:8}},'Filtro: ',
+      h('span',{style:{color:'var(--text)',fontWeight:700}},[...only].join(', ')),' · ',
+      h('span',{style:{color:'var(--blue)',cursor:'pointer',textDecoration:'underline'},onClick:clearSelected},'limpar')),
+    h('div',{style:{overflowX:'auto'}},
+      h('div',{style:{display:'grid',gridTemplateColumns:'44px repeat(12,minmax(48px,1fr)) 86px',gap:3,minWidth:760}},
+        h('div'),MONTHS_PT.map(m=>h('div',{key:m,style:{fontSize:10,color:'var(--muted)',textAlign:'center',paddingBottom:4}},m)),
+        h('div',{style:{fontSize:10,color:'var(--muted)',textAlign:'right',paddingBottom:4}},'Total'),
+        ...map.rows.flatMap(row=>{
+          const lblCol=row.kind==='projection'?'var(--blue)':row.kind==='current'?'var(--text)':'var(--muted)';
+          return[
+            h('div',{key:row.year+'l',style:{fontSize:11,fontWeight:row.kind==='actual'?500:700,color:lblCol,display:'flex',alignItems:'center'}},row.year),
+            ...row.cells.map((c,i)=>{
+              const max=c.projected?map.maxProj:map.maxActual;
+              const tip=MONTHS_PT[i]+' '+row.year+' · '+(c.eur>0?eur(c.eur):'sem dividendos')+(c.projected?' (projecção)':'')+
+                (c.items.length?'\n'+c.items.slice(0,8).map(([t,v])=>t+' '+eur(v)).join(' · ')+(c.items.length>8?' …':''):'');
+              return h('div',{key:row.year+'-'+i,title:tip,style:{...cellStyle,
+                background:c.eur>0?shade(c.eur,max,c.projected):'var(--s2)',
+                border:c.projected?'1px dashed rgba(96,165,250,.7)':'1px solid var(--border)',
+                color:c.eur>0?'#e6edf3':'transparent'}},c.eur>0?eur(c.eur):'·');
+            }),
+            h('div',{key:row.year+'t',style:{fontSize:11,fontWeight:700,textAlign:'right',display:'flex',alignItems:'center',justifyContent:'flex-end',
+              color:row.kind==='projection'?'var(--blue)':row.kind==='current'?'var(--text)':'var(--green)'}},(row.kind==='current'?'':'+')+eur(row.total))
+          ];
+        })
+      )
+    ),
+    h('div',{style:{display:'flex',justifyContent:'space-between',flexWrap:'wrap',gap:8,marginTop:10,fontSize:10,color:'var(--muted)'}},
+      h('div',{style:{display:'flex',gap:14,flexWrap:'wrap'}},legend(map.maxActual,false),h('span',{style:{color:'var(--blue)'}},'projecção'),legend(map.maxProj,true)),
+      h('div',null,'passa o cursor sobre os meses · selecciona linhas em "Rendimento por Posição" para filtrar'+(evCount?' · datas reais: '+evCount+' tickers':''))
+    ),
+    map.noDates.length>0&&h('div',{style:{fontSize:9,color:'var(--muted)',marginTop:6}},
+      'Sem datas nem meses de pagamento (distribuído por igual): '+map.noDates.join(', '))
+  );
 }
 
 // ── Certificados de Aforro: maturidade (anos após a constituição) por série ──
@@ -2483,9 +2766,9 @@ function TaxPaidByYear({pos,sold,income,wealth,cfg}){
       CUR_YEAR
     );
     const TAX_YEARS=YEARS.filter(y=>y>=Math.max(2020,dataStartYear));
-    const fx=cfg?.fxEurUsd||1.08;
+    const fxL=makeFxLookup(cfg);
     const TAX_RATE=cfg?.taxRate||0.28;
-    const capitalGains=applyAnnualCapitalGainsTax(buildCapitalGainsEvents(pos,sold,fx,TAX_RATE));
+    const capitalGains=applyAnnualCapitalGainsTax(buildCapitalGainsEvents(pos,sold,fxL.on,TAX_RATE));
 
     const taxRows=TAX_YEARS.map(y=>{
       let whtPaid=0,irsDiv=0,totalDiv=0;
@@ -2496,7 +2779,7 @@ function TaxPaidByYear({pos,sold,income,wealth,cfg}){
       pos.forEach(p=>{
         const div=getIncomeYear(income,p.t,y);
         if(!div)return;
-        const divEur=p.cat==='USD'?div/fx:div;
+        const divEur=p.cat==='USD'?div/fxL.avg(String(y)):div;
         totalDiv+=divEur;
         const flag=p.country||pc[p.t]||'🌐';
         const whtRate=whtRateForCountry(cfg,flag);
@@ -2509,7 +2792,7 @@ function TaxPaidByYear({pos,sold,income,wealth,cfg}){
       (sold||[]).forEach(p=>{
         const div=getSoldDivByYear(p,y);
         if(!div)return;
-        const divEur=p.cat==='USD'?div/fx:div;
+        const divEur=p.cat==='USD'?div/fxL.avg(String(y)):div;
         totalDiv+=divEur;
         const flag=p.country||pc[p.t]||'🌐';
         const whtRate=whtRateForCountry(cfg,flag);
@@ -2723,27 +3006,27 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
      Sources:
      1. sold[] positions — use transactions if present, fallback to flat n/av/sv
      2. active pos[] with sell transactions in selected year                    */
+  const fxL=useMemo(()=>makeFxLookup(cfg),[cfg]);
   const cgRows=useMemo(()=>{
-    const fx=cfg?.fxEurUsd||1.08;
-    const events=buildCapitalGainsEvents(pos,sold,fx,TAX_RATE);
+    const events=buildCapitalGainsEvents(pos,sold,fxL.on,TAX_RATE);
     return applyAnnualCapitalGainsTax(events).events
       .filter(event=>year==='ALL'||event.date.startsWith(year))
       .sort((a,b)=>new Date(b.date)-new Date(a.date));
-  },[sold,pos,year,TAX_RATE,cfg]);
+  },[sold,pos,year,TAX_RATE,fxL]);
 
-  const cgTotals=useMemo(()=>{
-    const fx=cfg?.fxEurUsd||1.08;
-    return cgRows.reduce((a,r)=>{
-      const toE=v=>r.sym==='$'?v/fx:v;
-      return{
-        proceeds:a.proceeds+toE(r.proceeds||0),
-        cost:a.cost+toE(r.costBasis||0),
-        pl:a.pl+toE(r.pl||0),
-        tax:a.tax+(r.taxEur||0),
-        fee:a.fee+toE(r.fee||0),
-      };
-    },{proceeds:0,cost:0,pl:0,tax:0,fee:0});
-  },[cgRows,cfg]);
+  const cgTotals=useMemo(()=>cgRows.reduce((a,r)=>({
+    proceeds:a.proceeds+(r.proceedsEur||0),
+    cost:a.cost+(r.costEur||0),
+    pl:a.pl+(r.plEur||0),
+    tax:a.tax+(r.taxEur||0),
+    fee:a.fee+(r.feeEur||0),
+  }),{proceeds:0,cost:0,pl:0,tax:0,fee:0}),[cgRows]);
+  // Dividends: USD converted at the average ECB rate of each year.
+  const divToEur=(byYear,cat)=>{
+    if(cat!=='USD')return yearVal(byYear,year);
+    if(year!=='ALL')return(byYear?.[year]||0)/fxL.avg(String(year));
+    return Object.entries(byYear||{}).filter(([k])=>YEARS.includes(k)||YEARS.includes(parseInt(k))).reduce((s,[k,v])=>s+(v||0)/fxL.avg(String(k)),0);
+  };
 
   const yearVal=(byYear,y)=>{
     if(y==='ALL')return Object.entries(byYear||{}).filter(([k])=>YEARS.includes(k)||YEARS.includes(parseInt(k))).reduce((s,[,v])=>s+(v||0),0);
@@ -2755,8 +3038,6 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
     if(!income&&!(sold||[]).length)return[];
     const posMap=buildPosMap(pos||[]);
 
-    const fx=cfg?.fxEurUsd||1.08;
-
     // Open positions from income object
     const openRows=Object.entries(income||{})
       .map(([ticker,byYear])=>{
@@ -2765,7 +3046,7 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
         const country=tickerCountry[ticker]||'🌐';
         const p=posMap[ticker]||posMap[normTicker(ticker)];
         const cat=p?.cat||'EUR';
-        const grossEUR=cat==='USD'?gross/fx:gross; // tax is owed/paid in EUR
+        const grossEUR=divToEur(byYear,cat); // tax is owed/paid in EUR
         const whtRate=whtRateFor(country);
         const netTaxRate=Math.max(0,TAX_RATE-whtRate);
         const withheld=grossEUR*whtRate;
@@ -2782,7 +3063,7 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
         if(gross<=0)return null;
         const country=tickerCountry[p.t]||p.country||'🌐';
         const cat=p.cat||'EUR';
-        const grossEUR=cat==='USD'?gross/fx:gross;
+        const grossEUR=divToEur(p.divByYear,cat);
         const whtRate=whtRateFor(country);
         const netTaxRate=Math.max(0,TAX_RATE-whtRate);
         const withheld=grossEUR*whtRate;
@@ -2793,7 +3074,7 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
       .filter(Boolean);
 
     return [...openRows,...soldRows].sort((a,b)=>b.gross-a.gross);
-  },[income,sold,pos,year,TAX_RATE,tickerCountry,cfg]);
+  },[income,sold,pos,year,TAX_RATE,tickerCountry,cfg,fxL]);
 
   const divTotal=useMemo(()=>divRows.reduce((a,r)=>({
     gross:a.gross+r.gross,
@@ -2860,7 +3141,7 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
         value:'-\u20ac'+Math.max(0,cgTotals.tax+divTotal.taxLocal).toFixed(2),
         sub:'already Tax withhold (\u20ac'+divTotal.withheld.toFixed(2)+')'}),
       h(SummaryCard,{label:'Capital Gains Tax',icon:null,accent:'red',
-        tooltip:'Usa a escala de redução por tempo de detenção (Lei 31/2024): 28% até 2 anos, 25,2% dos 2-5, 22,4% dos 5-8, 19,6% acima de 8 anos. Diferente da taxa fixa 28% usada no card "Tax Harvesting" abaixo.',
+        tooltip:'Usa a escala de redução por tempo de detenção (Lei 31/2024): 28% até 2 anos, 25,2% dos 2-5, 22,4% dos 5-8, 19,6% acima de 8 anos. Diferente da taxa fixa 28% usada no card "Tax Harvesting" abaixo. Valores em USD convertidos à taxa de referência do BCE do dia de cada venda (receita) e de cada compra (custo), por isso o resultado inclui o ganho ou perda cambial. Actualiza o histórico com o botão BCE em Config.',
         value:'-\u20ac'+cgTotals.tax.toFixed(2),
         sub:cgRows.length+' sale event'+(cgRows.length!==1?'s':'')+' · total €'+cgTotals.pl.toFixed(2)}),
       h(SummaryCard,{label:'Comissões Pagas',icon:null,accent:'red',
@@ -4278,7 +4559,7 @@ function App(){
     // consumes the same already-converted values — avoids a currency-mixing bug where USD gains
     // would get grouped alongside EUR gains without conversion.
     const capitalGains=applyAnnualCapitalGainsTax(
-      buildCapitalGainsEvents(pos,sold,fxRate,TAX_RATE_CFG)
+      buildCapitalGainsEvents(pos,sold,makeFxLookup(cfgData).on,TAX_RATE_CFG)
     );
     const allCgRows=capitalGains.events.map(event=>({
       ticker:event.ticker,date:event.date,pl:event.plEur,tax:event.taxEur
@@ -4292,7 +4573,7 @@ function App(){
       const isUSD=p?.cat==='USD';
       Object.entries(byYear).forEach(([y,gross])=>{
         if(!(gross>0))return;
-        const grossEUR=isUSD?gross/fxRate:gross;
+        const grossEUR=isUSD?gross/makeFxLookup(cfgData).avg(String(y)):gross;
         const country=tickerCountryMap[ticker]||tickerCountryMap[normTicker(ticker)]||'🌐';
         const whtRate=whtRateForCsv(country);
         const netTaxRate=Math.max(0,TAX_RATE_CFG-whtRate);
@@ -4303,7 +4584,7 @@ function App(){
       const isUSD=p.cat==='USD';
       Object.entries(p.divByYear||{}).forEach(([y,gross])=>{
         if(!(gross>0))return;
-        const grossEUR=isUSD?gross/fxRate:gross;
+        const grossEUR=isUSD?gross/makeFxLookup(cfgData).avg(String(y)):gross;
         const country=tickerCountryMap[p.t]||p.country||'🌐';
         const whtRate=whtRateForCsv(country);
         const netTaxRate=Math.max(0,TAX_RATE_CFG-whtRate);
@@ -4558,7 +4839,7 @@ function App(){
       tab==='portfolio'&&h(Port,{pos:safePos,setPos,income:safeInc,qual:safeQual,setQual,cfg,sold:safeSold,setSold}),
       tab==='transactions'&&h(TransactionsPage,{cfg,pos:safePos,setPos,sold:safeSold,setSold,income:safeInc,qual:safeQual,setQual}),
       tab==='config'&&h(Conf,{wealth,cfg,setCfg,pos:safePos,setPos,sold:safeSold,setSold,income:safeInc,qual:safeQual,setQual,onReset:handleReset,exportCSV,importData,exportData,importBrokerQuotes,exportBrokerQuoteTemplate}),
-      tab==='dividendos'&&h(DividendosPage,{pos:safePos,income:safeInc,qual:safeQual,sold:safeSold,cfg}),
+      tab==='dividendos'&&h(DividendosPage,{pos:safePos,income:safeInc,qual:safeQual,sold:safeSold,cfg,setCfg}),
       tab==='analytics'&&h(AnalyticsPage,{pos:safePos,qual:safeQual,income:safeInc,sold:safeSold,cfg,wealth}),
       tab==='teses'&&h(TesesPage,{pos:safePos,teses,qual:safeQual}),
       tab==='patrimonio'&&h(PatrimonioPage,{wealth,pos:safePos,cfg}),
@@ -5911,13 +6192,44 @@ function Conf({wealth,cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onR
       const{date,rates}=await fetchEcbRates();
       const usd=Math.round(rates.USD*10000)/10000;
       const next={...cfg,fxEurUsd:usd,fxEurUsdAsOf:date};
-      // Keep the daily history (used for taxes) up to date when it exists.
-      if(cfg?.fxHistory&&cfg.fxHistory.rates&&typeof cfg.fxHistory.rates==='object'){
-        next.fxHistory={...cfg.fxHistory,rates:{...cfg.fxHistory.rates,[date]:usd},asOf:(cfg.fxHistory.asOf&&cfg.fxHistory.asOf>date)?cfg.fxHistory.asOf:date};
-      }
+      // Daily history used by the Tax page: fill everything from the first
+      // transaction (or the last stored day) up to today with ECB reference rates.
+      const old=cfg?.fxHistory&&typeof cfg.fxHistory.rates==='object'?cfg.fxHistory:null;
+      const need=earliestDataDate(pos,sold);
+      const known=Object.keys(old?.rates||{}).sort();
+      const start=known.length&&known[0]<=need?known[known.length-1]:need;
+      setFxStatus({loading:true,text:'A obter histórico do BCE desde '+start+'…'});
+      const hist=await fetchEcbHistory(start);
+      const merged={...(old?.rates||{}),...hist,[date]:usd};
+      const days=Object.keys(merged).sort();
+      next.fxHistory={...(old||{}),unit:'USD por 1 EUR',
+        source:'BCE · taxas de referência diárias do euro (via Frankfurter)'+(old?.source&&!/BCE/.test(old.source)?' · antes: '+old.source:''),
+        asOf:days[days.length-1],rates:merged};
       setCfg(next);dbs('fc',next).catch(e=>console.error('save exchange rate failed',e));
-      setFxStatus({text:`Actualizado: ${usd.toFixed(4)} (BCE, ${date})`});
+      setFxStatus({text:`Actualizado: ${usd.toFixed(4)} (BCE, ${date}) · histórico ${days[0]} → ${days[days.length-1]} (${Object.keys(hist).length} dias novos)`});
     }catch(error){setFxStatus({error:true,text:error.message});}
+  };
+  const[benchStatus,setBenchStatus]=useState(null);
+  const updateBenchmarks=async()=>{
+    const key=readPriceKey('alphavantage');
+    if(!key){setBenchStatus({error:true,text:'Falta a chave do Alpha Vantage (Config → Cotações online).'});return;}
+    try{
+      const startYear=Math.min(2023,...Object.keys(cfg?.benchmarkCache?.sp500?.byYear||{}).map(k=>parseInt(k)).filter(Number.isFinite));
+      const next={...(cfg?.benchmarkCache||{})};
+      let asOf=null;
+      for(let i=0;i<BENCHMARKS.length;i++){
+        const b=BENCHMARKS[i];
+        if(i>0)await new Promise(r=>setTimeout(r,13000));
+        setBenchStatus({loading:true,text:`A obter ${b.label} (${b.symbol})…`});
+        const r=yearlyReturns(await fetchMonthlyAdjusted(b.symbol,key),startYear);
+        next[b.key]={byYear:r.byYear,source:b.symbol+' · Alpha Vantage, fecho mensal ajustado (dividendos reinvestidos)'};
+        asOf=asOf&&asOf<r.asOf?asOf:r.asOf;
+      }
+      next.asOf=asOf;
+      const nextCfg={...cfg,benchmarkCache:next};
+      setCfg(nextCfg);dbs('fc',nextCfg).catch(e=>console.error('save benchmarks failed',e));
+      setBenchStatus({text:'Actualizado com dados até '+asOf+'.'});
+    }catch(error){setBenchStatus({error:true,text:error.message});}
   };
   const tabBtn=(id,label)=>h('button',{key:id,className:'fb'+(confTab===id?' on':''),onClick:()=>setConfTab(id)},label);
   return h('div',null,
@@ -6081,9 +6393,13 @@ function Conf({wealth,cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onR
             )
           )
         ),
-        h('div',{style:{fontSize:9,color:'var(--muted)',padding:'2px 2px 0'}},
-          'Última actualização: '+(cfg?.benchmarkCache?.asOf||'—')+' · pede ao Claude para investigar valores actuais e editar aqui'
+        h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,padding:'2px 2px 0',flexWrap:'wrap'}},
+          h('div',{style:{fontSize:9,color:'var(--muted)'}},
+            'Última actualização: '+(cfg?.benchmarkCache?.asOf||'—')+(cfg?.benchmarkCache?.sp500?.source?' · '+cfg.benchmarkCache.sp500.source.split(' · ').slice(1).join(' · '):'')),
+          h('button',{className:'btn-secondary ml-0',style:{fontSize:10,padding:'4px 8px'},disabled:benchStatus&&benchStatus.loading,onClick:updateBenchmarks,
+            title:'Retorno total anual do SPY (S&P 500) e URTH (MSCI World) — 2 pedidos ao Alpha Vantage'},benchStatus&&benchStatus.loading?'…':'Actualizar (SPY, URTH)')
         ),
+        benchStatus&&h('div',{style:{fontSize:9,color:benchStatus.error?'var(--red)':'var(--green)',padding:'0 2px'}},benchStatus.text),
 
       )
     ), /* close card-sm Preferências */
@@ -8138,7 +8454,7 @@ function positionEstAnnual(p,qualMap){
   const dy=getQual(qualMap,p.t)?.dy||0;
   return dy>0&&p.n>0&&p.cv>0?dy*p.n*p.cv:null;
 }
-function IncRow({p,sm,qualMap,income,DISP_YEARS,GROWTH}){
+function IncRow({p,sm,qualMap,income,DISP_YEARS,GROWTH,selected,onToggle}){
   // Est. this year = yield × shares × price; Est. next year = that × (1 + divGrowth)
   const est=positionEstAnnual(p,qualMap);
   const estNext=est!=null?est*GROWTH:null;
@@ -8146,7 +8462,9 @@ function IncRow({p,sm,qualMap,income,DISP_YEARS,GROWTH}){
   const total=getIncome(income,p.t);
   const hasAny=total>0||est;
   if(!hasAny)return null;
-  return h('tr',{key:p.t},
+  const isSel=selected&&selected.has(p.t);
+  return h('tr',{key:p.t,onClick:onToggle?()=>onToggle(p.t):undefined,title:onToggle?'Clica para filtrar o mapa de rendimento':undefined,
+    style:{cursor:onToggle?'pointer':undefined,background:isSel?'rgba(59,130,246,.14)':undefined,boxShadow:isSel?'inset 3px 0 0 var(--blue)':undefined}},
     h('td',null,h(TickerLink,{t:p.t,className:'font-semibold'})),
     h('td',{className:'mono-sm-italic'},
       est?sm+fn(est):'—'),
@@ -8162,7 +8480,7 @@ function IncRow({p,sm,qualMap,income,DISP_YEARS,GROWTH}){
 }
 // Renders one currency-group section (USD/EUR+ETF) of the "Rendimento por
 // Posição" table. Hoisted to top level for the same reason as IncRow above.
-function GroupSection({grp,sm,label,headerBg,labelColor,qualMap,income,DISP_YEARS,GROWTH,sortField,sortDir,sortVal}){
+function GroupSection({grp,sm,label,headerBg,labelColor,qualMap,income,DISP_YEARS,GROWTH,sortField,sortDir,sortVal,selected,onToggle}){
   const sortedGrp=useMemo(()=>{
     if(!sortField||!sortVal)return grp;
     const withVal=grp.map(p=>({p,v:sortVal(p,sortField)}));
@@ -8172,7 +8490,7 @@ function GroupSection({grp,sm,label,headerBg,labelColor,qualMap,income,DISP_YEAR
     });
     return withVal.map(x=>x.p);
   },[grp,sortField,sortDir,sortVal]);
-  const rows=sortedGrp.map(p=>h(IncRow,{key:p.t,p,sm,qualMap,income,DISP_YEARS,GROWTH})).filter(Boolean);
+  const rows=sortedGrp.map(p=>h(IncRow,{key:p.t,p,sm,qualMap,income,DISP_YEARS,GROWTH,selected,onToggle})).filter(Boolean);
   if(!rows.length)return null;
   const totals=Object.fromEntries(DISP_YEARS.map(y=>[y,grp.reduce((s,p)=>s+getIncomeYear(income,p.t,y),0)]));
   const grandTotal=grp.reduce((s,p)=>s+getIncome(income,p.t),0);
@@ -8296,7 +8614,9 @@ function DecelerationCard({pos,qualMap}){
       );
 }
 
-function DividendosPage({pos,income,qual,sold,cfg}){
+function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
+  const[selTickers,setSelTickers]=useState(()=>new Set());
+  const toggleTicker=t=>setSelTickers(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});
   const[incTab,setIncTab]=useState('posicoes');
   const[incSortField,setIncSortField]=useState('total');
   const[incSortDir,setIncSortDir]=useState('desc');
@@ -8500,7 +8820,8 @@ function DividendosPage({pos,income,qual,sold,cfg}){
       );
     })(),
 
-
+    /* ── Mapa de rendimento: dividendos por mês ── */
+    h(DividendHeatmap,{pos,sold,qualMap,cfg,setCfg,growth:GROWTH,selected:selTickers,clearSelected:()=>setSelTickers(new Set())}),
 
     /* ── Row 2: Yield & Estimated Dividend Pies — 2 cols ── */
     h('div',{className:'grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4'},
@@ -8590,8 +8911,8 @@ function DividendosPage({pos,income,qual,sold,cfg}){
               ...DISP_YEARS.map(y=>thSort(y,y,{color:y===CUR_YEAR?'var(--gold)':'inherit'})),
               thSort('total','Total'),
             )),
-            h(GroupSection,{grp:stocksUSD_div,sm:'$',label:'Acções USD',headerBg:'#0f1e3a',labelColor:'var(--blue)',qualMap,income,DISP_YEARS,GROWTH,sortField:incSortField,sortDir:incSortDir,sortVal}),
-            h(GroupSection,{grp:stocksEUR_div,sm:'€',label:'Acções EUR + ETFs',headerBg:'#0a1f16',labelColor:'var(--green)',qualMap,income,DISP_YEARS,GROWTH,sortField:incSortField,sortDir:incSortDir,sortVal}),
+            h(GroupSection,{selected:selTickers,onToggle:toggleTicker,grp:stocksUSD_div,sm:'$',label:'Acções USD',headerBg:'#0f1e3a',labelColor:'var(--blue)',qualMap,income,DISP_YEARS,GROWTH,sortField:incSortField,sortDir:incSortDir,sortVal}),
+            h(GroupSection,{selected:selTickers,onToggle:toggleTicker,grp:stocksEUR_div,sm:'€',label:'Acções EUR + ETFs',headerBg:'#0a1f16',labelColor:'var(--green)',qualMap,income,DISP_YEARS,GROWTH,sortField:incSortField,sortDir:incSortDir,sortVal}),
           )
         )
       );
@@ -8707,7 +9028,7 @@ function DividendosPage({pos,income,qual,sold,cfg}){
     /* ── Dividend calendar projection, allocated across each position's known
        payment months using current yield × shares × price. ── */
     (()=>{
-      const calendar=buildDividendCalendarData(pos||[],qualMap,cfg?.fxEurUsd||1.08);
+      const calendar=buildDividendCalendarData(pos||[],qualMap,cfg?.fxEurUsd||1.08,cfg?.dividendEvents);
       const maxMonth=Math.max(...calendar.months.map(month=>month.totalEUR),1);
       const averageMonth=calendar.annualEUR/12;
       return h('div',{className:'card split-8'},
