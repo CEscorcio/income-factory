@@ -179,7 +179,10 @@ End date, when `endDate` is absent: `dataConstituicao` + **E 10 years · F 15 ye
 `plataforma`, `pais` (flag), `country`, `wht` (rate), `valor` (balance), `rate`, `investidor`, plus yearly amounts as keys `"2023"`, `"2024"`, … (`null` when unknown).
 
 ### `claudiaInvestimentos`
-`{ "investimentos": [ { "ticker", "valorInvestido", "precoCompra", "dataCompra" } ] }`. Lots bought outside the main portfolio (currently VWCE.DE).
+`{ "investimentos": [ { "ticker", "valorInvestido", "precoCompra", "dataCompra", "broker"? } ] }`. Lots bought outside the main portfolio (currently VWCE.DE). Units = `valorInvestido / precoCompra`; the current price comes from an active position with the same ticker or from `config.refPrices`.
+
+### `carlitosInvestimentos`
+Same shape as `claudiaInvestimentos`, owner **Carlitos**. Shown as its own "Carlitos Investimentos" card on Net Worth and included in the net-worth totals.
 
 ### Display tables
 - `owners`: `{ "<name>": { "color": "#hex", "bg": "#hex" } }`
