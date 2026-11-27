@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.22';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.23';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -8577,33 +8577,45 @@ function ChowderRuleCard({pos,qualMap,income}){
 }
 
 // ── Desaceleração — posições onde o crescimento do dividendo a 1 ano ficou abaixo do de 5 anos ──
+// Shows every stock whose 1Y dividend growth is below its 5Y growth (decelerating),
+// most decelerated first; free rows (up to DECEL_ROWS) go to the stocks closest to
+// decelerating, shown in green as "a acelerar".
+const DECEL_ROWS=19;
 function DecelerationCard({pos,qualMap}){
-      const decel=pos.filter(p=>p.cat!=='ETF'&&p.n>0).map(p=>{
+      const all=pos.filter(p=>p.cat!=='ETF'&&p.n>0).map(p=>{
         const q=getQual(qualMap,p.t);
         return{t:p.t,name:p.name,g1:q?.g1,g5:q?.g5};
-      }).filter(x=>x.g1!=null&&x.g5!=null&&x.g1>0&&x.g5>0&&x.g1<x.g5)
-        .sort((a,b)=>(a.g1/a.g5)-(b.g1/b.g5))
-        .slice(0,18);
-      if(!decel.length)return null;
-      const maxG5=Math.max(...decel.map(x=>x.g5),.01);
+      }).filter(x=>x.g1!=null&&x.g5!=null&&x.g1>0&&x.g5>0)
+        .sort((a,b)=>(a.g1/a.g5)-(b.g1/b.g5));
+      const slowing=all.filter(x=>x.g1<x.g5);
+      const rows=[...slowing.slice(0,DECEL_ROWS),...all.filter(x=>x.g1>=x.g5).slice(0,Math.max(0,DECEL_ROWS-slowing.length))];
+      if(!slowing.length)return null;
+      const maxG=Math.max(...rows.map(x=>Math.max(x.g1,x.g5)),.01);
+      const extra=rows.length-Math.min(slowing.length,DECEL_ROWS);
       return h('div',{className:'card',style:{height:'100%'}},
-        h(Shdr,{title:'Desaceleração',hint:'1Y DGR abaixo do 5Y DGR — top 18 mais desacelerados'}),
+        h(Shdr,{title:'Desaceleração',hint:'1Y DGR abaixo do 5Y DGR — '+Math.min(slowing.length,DECEL_ROWS)+' a desacelerar'+(extra?' · '+extra+' a acelerar':'')}),
         h('div',null,
-          ...decel.map(x=>{
-            const barW1=Math.min(x.g1/maxG5*100,100);
-            const barW5=Math.min(x.g5/maxG5*100,100);
-            return h('div',{key:x.t,style:{display:'flex',alignItems:'center',gap:10,padding:'8px 0',borderBottom:'1px solid var(--s2)'}},
-              h(TickerLink,{t:x.t,style:{fontSize:11,fontWeight:700,width:64,flexShrink:0}}),
+          ...rows.map((x,i)=>{
+            const up=x.g1>=x.g5;
+            const col=up?'var(--green)':'var(--gold)';
+            const barW1=Math.min(x.g1/maxG*100,100);
+            const barW5=Math.min(x.g5/maxG*100,100);
+            return h('div',{key:x.t,title:up?'A acelerar: crescimento a 1 ano acima do de 5 anos':'A desacelerar: crescimento a 1 ano abaixo do de 5 anos',
+              style:{display:'flex',alignItems:'center',gap:10,padding:'8px 0',borderBottom:'1px solid var(--s2)',
+                borderTop:up&&i>0&&rows[i-1].g1<rows[i-1].g5?'1px dashed var(--border)':undefined}},
+              h('div',{style:{width:64,flexShrink:0}},
+                h(TickerLink,{t:x.t,style:{fontSize:11,fontWeight:700}}),
+                up&&h('div',{style:{fontSize:8,color:'var(--green)',marginTop:2}},'a acelerar')),
               h('div',{style:{flex:1}},
                 h('div',{style:{position:'relative',height:7,background:'var(--s2)',borderRadius:4,overflow:'hidden',marginBottom:3}},
                   h('div',{style:{position:'absolute',left:0,top:0,height:'100%',width:barW5+'%',background:'var(--muted)',opacity:.4,borderRadius:4}})
                 ),
                 h('div',{style:{position:'relative',height:7,background:'var(--s2)',borderRadius:4,overflow:'hidden'}},
-                  h('div',{style:{position:'absolute',left:0,top:0,height:'100%',width:barW1+'%',background:'var(--gold)',borderRadius:4}})
+                  h('div',{style:{position:'absolute',left:0,top:0,height:'100%',width:barW1+'%',background:col,borderRadius:4}})
                 )
               ),
               h('div',{style:{textAlign:'right',flexShrink:0,minWidth:100}},
-                h('div',{style:{fontSize:10,color:'var(--gold)',fontWeight:700}},'1Y '+fp(x.g1)),
+                h('div',{style:{fontSize:10,color:col,fontWeight:700}},'1Y '+fp(x.g1)),
                 h('div',{style:{fontSize:9,color:'var(--muted)'}},'5Y '+fp(x.g5))
               )
             );
