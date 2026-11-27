@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.6';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.7';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -7524,13 +7524,22 @@ function AnalyticsPage({pos,qual,income,sold,cfg,wealth}){
         (()=>{
           const etfTer=cfg?.etfTer||{};
           const etfPos=pos.filter(p=>p.cat==='ETF'&&p.n>0&&p.cv>0);
-          const rows=etfPos.map(p=>{
-            const val=p.n*p.cv;
-            const ter=etfTer[p.t]||0;
+          const mkRow=(t,val,note)=>{
+            const ter=etfTer[t]||0;
             const costAnnual=val*ter;
-            const costMonthly=costAnnual/12;
-            return{t:p.t,val,ter,costAnnual,costMonthly};
-          }).sort((a,b)=>b.costAnnual-a.costAnnual);
+            return{key:t+(note||''),t,note,val,ter,costAnnual,costMonthly:costAnnual/12};
+          };
+          // ETFs held outside the portfolio (Claudia + Carlitos Investimentos), one line per ticker.
+          const outside={};
+          WEALTH_INVESTMENTS.forEach(w=>(wealth?.[w.key]?.investimentos||[]).forEach(r=>{
+            if(!r?.ticker)return;
+            const o=outside[r.ticker]=outside[r.ticker]||{val:0,owners:new Set()};
+            o.val+=investmentLot(r,pos,cfg).value;o.owners.add(w.owner);
+          }));
+          const rows=[
+            ...etfPos.map(p=>mkRow(p.t,p.n*p.cv)),
+            ...Object.entries(outside).filter(([,o])=>o.val>0).map(([t,o])=>mkRow(t,o.val,[...o.owners].join(' + '))),
+          ].sort((a,b)=>b.costAnnual-a.costAnnual);
           const totalVal=rows.reduce((s,r)=>s+r.val,0);
           const totalCost=rows.reduce((s,r)=>s+r.costAnnual,0);
           const avgTer=totalVal>0?totalCost/totalVal:0;
@@ -7547,8 +7556,10 @@ function AnalyticsPage({pos,qual,income,sold,cfg,wealth}){
                   h('th',{style:{width:140}},'Peso no custo total'),
                 )),
                 h('tbody',null,
-                  ...rows.map(r=>h('tr',{key:r.t,style:{borderBottom:'1px solid var(--s2)'}},
-                    h('td',{style:{padding:'8px 12px',fontWeight:600}},r.t),
+                  ...rows.map(r=>h('tr',{key:r.key,style:{borderBottom:'1px solid var(--s2)'}},
+                    h('td',{style:{padding:'8px 12px',fontWeight:600}},r.t,
+                      r.note&&h('div',{style:{fontSize:9,fontWeight:400,color:'var(--muted)'}},r.note),
+                      r.ter===0&&h('div',{style:{fontSize:9,fontWeight:400,color:'var(--gold)'}},'TER em falta (Config)')),
                     h('td',{style:{padding:'8px 10px',textAlign:'right',color:'var(--muted)'}}, '€'+fn(r.val)),
                     h('td',{style:{padding:'8px 10px',textAlign:'right',color:'var(--muted)'}},(r.ter*100).toFixed(2)+'%'),
                     h('td',{style:{padding:'8px 10px',textAlign:'right',color:'var(--red)',fontWeight:600}},r.costAnnual>0?'-€'+fn(r.costAnnual):'—'),
