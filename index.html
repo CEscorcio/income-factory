@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.19';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.20';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -4048,8 +4048,6 @@ function StockModal({ticker,pos,sold,income,qual,cfg,onClose}){
           isSold&&SMRow('Imposto Mais-Valias (est.)',estCgTax>0?'-'+sym+fn(estCgTax):'—',estCgTax>0?'var(--red)':undefined),
           SMRow('WHT retido (acumulado)',whtRate>0?'-'+sym+fn(cumDiv*whtRate):'—',cumDiv*whtRate>0?'var(--red)':undefined),
           SMRow('Imposto Dividendos PT (est.)',estDivTaxPT>0?'-'+sym+fn(estDivTaxPT):'—',estDivTaxPT>0?'var(--red)':undefined),
-          h('div',{style:{fontSize:9,color:'var(--muted)',marginTop:6,fontStyle:'italic',lineHeight:1.4}},
-            'Nota: o imposto de mais-valias aqui é ilustrativo por posição. O cálculo real do IRS compensa perdas contra ganhos entre todas as posições no mesmo ano.'),
 
           SectionHead('Rendimento & Dividendos'),
           SMRow('Est. rendimento anual',annualIncomeEst>0?sym+fn(annualIncomeEst):'—'),
@@ -8451,6 +8449,7 @@ const HoldingsPerf=memo(function HoldingsPerf({pos,income}){
 // Estimated annual dividend of an active position: yield × shares × current price
 // (same as the current-year estimate in the annual bar charts). Null when unknown.
 function positionEstAnnual(p,qualMap){
+  if(p._closed)return null; // sold position shown in the "Todas" tab
   const dy=getQual(qualMap,p.t)?.dy||0;
   return dy>0&&p.n>0&&p.cv>0?dy*p.n*p.cv:null;
 }
@@ -8465,7 +8464,8 @@ function IncRow({p,sm,qualMap,income,DISP_YEARS,GROWTH,selected,onToggle}){
   const isSel=selected&&selected.has(p.t);
   return h('tr',{key:p.t,onClick:onToggle?()=>onToggle(p.t):undefined,title:onToggle?'Clica para filtrar o mapa de rendimento':undefined,
     style:{cursor:onToggle?'pointer':undefined,background:isSel?'rgba(59,130,246,.14)':undefined,boxShadow:isSel?'inset 3px 0 0 var(--blue)':undefined}},
-    h('td',null,h(TickerLink,{t:p.t,className:'font-semibold'})),
+    h('td',null,h(TickerLink,{t:p.t,className:'font-semibold'}),
+      p._closed&&h('span',{style:{fontSize:9,color:'var(--muted)',marginLeft:6,padding:'1px 5px',border:'1px solid var(--border)',borderRadius:4}},'vendida')),
     h('td',{className:'mono-sm-italic'},
       est?sm+fn(est):'—'),
     h('td',{className:'mono-sm-italic'},
@@ -8631,6 +8631,15 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
   // Precomputed USD/EUR splits used in KPIs and Row 0
   const stocksUSD_div=useMemo(()=>stocks.filter(p=>p.cat==='USD'),[stocks]);
   const stocksEUR_div=useMemo(()=>stocks.filter(p=>p.cat!=='USD'),[stocks]);
+  // "Todas": active positions plus sold tickers no longer held, in one table.
+  const allWithDiv=useMemo(()=>{
+    const held=new Set(stocks.map(p=>p.t));
+    const closed=[];const seen=new Set();
+    (sold||[]).forEach(p=>{if(held.has(p.t)||seen.has(p.t))return;if(!(getIncome(income,p.t)>0))return;seen.add(p.t);closed.push({...p,_closed:true});});
+    return[...stocks,...closed];
+  },[stocks,sold,income]);
+  const allUSD_div=useMemo(()=>allWithDiv.filter(p=>p.cat==='USD'),[allWithDiv]);
+  const allEUR_div=useMemo(()=>allWithDiv.filter(p=>p.cat!=='USD'),[allWithDiv]);
 
   // Per-ticker 2025 income for diversification donut + bars
   const byTicker=useMemo(()=>{
@@ -8877,12 +8886,15 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
 
     /* ── Income Tabs ── */
     h('div',{style:{display:'flex',gap:6,marginBottom:16,borderBottom:'1px solid var(--border)',paddingBottom:8}},
+      h('button',{className:'fb'+(incTab==='todas'?' on':''),onClick:()=>setIncTab('todas')},'Todas'),
       h('button',{className:'fb'+(incTab==='posicoes'?' on':''),onClick:()=>setIncTab('posicoes')},'Posições Activas'),
       h('button',{className:'fb'+(incTab==='fechadas'?' on':''),onClick:()=>setIncTab('fechadas')},'Posições Vendidas')
     ),
 
     /* ── Tab: Rendimento por Posição ── */
-    incTab==='posicoes'&&(()=>{
+    (incTab==='posicoes'||incTab==='todas')&&(()=>{
+      const all=incTab==='todas';
+      const grpUSD=all?allUSD_div:stocksUSD_div,grpEUR=all?allEUR_div:stocksEUR_div;
       const sortVal=(p,field)=>{
         if(field==='ticker')return p.t;
         if(field==='est')return positionEstAnnual(p,qualMap)||0;
@@ -8899,7 +8911,7 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
         }},label+sortIcon(field));
       return h('div',{className:'mb-4'},
         h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}},
-          h(Shdr,{title:'Rendimento por Posição'}),
+          h(Shdr,{title:all?'Rendimento por Posição — activas e vendidas':'Rendimento por Posição'}),
           h('span',{style:{fontSize:9,color:'var(--muted)',fontStyle:'italic'}},'Est. '+CUR_YEAR+' = yield × posições × preço · Est. '+(CUR_YEAR+1)+' = Est. '+CUR_YEAR+' × '+GROWTH.toFixed(3))
         ),
         h('div',{className:'card-table sticky-head'},
@@ -8911,8 +8923,8 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
               ...DISP_YEARS.map(y=>thSort(y,y,{color:y===CUR_YEAR?'var(--gold)':'inherit'})),
               thSort('total','Total'),
             )),
-            h(GroupSection,{selected:selTickers,onToggle:toggleTicker,grp:stocksUSD_div,sm:'$',label:'Acções USD',headerBg:'#0f1e3a',labelColor:'var(--blue)',qualMap,income,DISP_YEARS,GROWTH,sortField:incSortField,sortDir:incSortDir,sortVal}),
-            h(GroupSection,{selected:selTickers,onToggle:toggleTicker,grp:stocksEUR_div,sm:'€',label:'Acções EUR + ETFs',headerBg:'#0a1f16',labelColor:'var(--green)',qualMap,income,DISP_YEARS,GROWTH,sortField:incSortField,sortDir:incSortDir,sortVal}),
+            h(GroupSection,{selected:selTickers,onToggle:toggleTicker,grp:grpUSD,sm:'$',label:'Acções USD',headerBg:'#0f1e3a',labelColor:'var(--blue)',qualMap,income,DISP_YEARS,GROWTH,sortField:incSortField,sortDir:incSortDir,sortVal}),
+            h(GroupSection,{selected:selTickers,onToggle:toggleTicker,grp:grpEUR,sm:'€',label:'Acções EUR + ETFs',headerBg:'#0a1f16',labelColor:'var(--green)',qualMap,income,DISP_YEARS,GROWTH,sortField:incSortField,sortDir:incSortDir,sortVal}),
           )
         )
       );
