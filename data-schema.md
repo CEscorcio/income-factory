@@ -179,7 +179,7 @@ End date, when `endDate` is absent: `dataConstituicao` + **E 10 years · F 15 ye
 | `netProfit` | number \| null | Net profit, if known. |
 
 ### `juros[]` (interest on cash accounts)
-`plataforma`, `pais` (flag), `country`, `wht` (rate), `valor` (balance), `rate`, `investidor`, plus yearly amounts as keys `"2023"`, `"2024"`, … (`null` when unknown).
+`plataforma`, `country` (flag or name; drives the withholding rate via `config.whtByCountry`), `valor` (balance), `rate`, `investidor`, plus yearly amounts as keys `"2023"`, `"2024"`, … (`null` when unknown).
 
 ### `claudiaInvestimentos`
 `{ "investimentos": [ { "ticker", "valorInvestido", "precoCompra", "dataCompra", "broker"? } ] }`. Lots bought outside the main portfolio (currently VWCE.DE). Units = `valorInvestido / precoCompra`; the current price comes from an active position with the same ticker or from `config.refPrices`.
