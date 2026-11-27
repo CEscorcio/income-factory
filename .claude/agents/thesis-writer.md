@@ -16,13 +16,14 @@ The page renders, in order:
 3. Moat
 4. Principal Risco
 5. Resposta Estratégica
-6. Financial Quality
-7. Balance Sheet
-8. Growth Thesis
-9. Bear Case
-10. O Que Destruiria a Tese
-11. Valuation
-12. Decisão Final
+6. Balance Sheet
+7. Growth Thesis
+8. Bear Case
+9. O Que Destruiria a Tese
+10. Valuation
+11. Decisão Final
+
+`financials` is not a numbered section either: it is shown as a "Financial Quality" table under the Qualidade do Dividendo card.
 
 The `swot` (4 items per quadrant: `{title, note}`, title of 2–4 words, note of one short sentence) is shown as an "Análise SWOT" matrix above the numbered sections; keep it consistent with the moat, main risk, bear case and growth thesis.
 
