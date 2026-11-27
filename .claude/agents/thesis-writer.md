@@ -22,8 +22,9 @@ The page renders, in order:
 9. Bear Case
 10. O Que Destruiria a Tese
 11. Valuation
-12. Scorecard
-13. Decisão Final
+12. Decisão Final
+
+The `scorecard` is not a numbered section: it is shown inside the "Fundamentais & Scorecard" card, next to the metrics from `quality`.
 
 A missing section simply doesn't render, so leave out what you can't support rather than padding it.
 

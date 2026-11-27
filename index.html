@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.14';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.15';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -8857,6 +8857,37 @@ function TesesTable(headers,rows){
     )
   );
 }
+// Thesis scorecard ("x / max" strings), coloured like the Quality Score legend:
+// ≥80% green · ≥60% blue · ≥40% yellow · ≥20% orange · below red.
+function parseScore(text){
+  const m=/^\s*(-?[\d.,]+)\s*\/\s*([\d.,]+)/.exec(String(text||''));
+  if(!m)return null;
+  const v=parseFloat(m[1].replace(',','.')),max=parseFloat(m[2].replace(',','.'));
+  return Number.isFinite(v)&&max>0?{v,max,r:Math.max(0,Math.min(1,v/max))}:null;
+}
+function scoreTone(r){
+  return r>=0.8?'var(--green)':r>=0.6?'var(--blue)':r>=0.4?'var(--tier-ok)':r>=0.2?'var(--tier-warn)':'var(--red)';
+}
+function TesesScorecard({items,total}){
+  if(!items||!items.length)return null;
+  const tot=parseScore(total);
+  return h('div',{style:{marginTop:14,paddingTop:12,borderTop:'1px dashed var(--border)'}},
+    h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:6}},
+      h('span',{style:{fontSize:10,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--muted)'}},'Scorecard'),
+      total&&h('span',{style:{fontSize:13,fontWeight:800,fontFamily:'var(--mono)',color:tot?scoreTone(tot.r):'var(--text)'}},total)
+    ),
+    items.map((it,i)=>{
+      const sc=parseScore(it.score);
+      const col=sc?scoreTone(sc.r):'var(--muted)';
+      return h('div',{key:i,style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) 70px 52px',gap:8,alignItems:'center',padding:'4px 0',borderBottom:'1px solid var(--s2)',fontSize:12}},
+        h('span',{style:{color:'var(--muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'},title:it.metric},it.metric),
+        h('div',{style:{height:5,background:'var(--s2)',borderRadius:3,overflow:'hidden'}},
+          sc&&h('div',{style:{height:'100%',width:(sc.r*100)+'%',background:col,borderRadius:3}})),
+        h('span',{style:{textAlign:'right',fontWeight:700,fontFamily:'var(--mono)',color:col}},it.score||'—')
+      );
+    })
+  );
+}
 function TesesList(items,color){
   if(!items||!items.length)return h('div',{style:{fontSize:11,color:'var(--muted)',fontStyle:'italic',padding:'4px 0'}},'Sem dados');
   return h('ul',{style:{margin:0,paddingLeft:18,display:'flex',flexDirection:'column',gap:4}},
@@ -8999,14 +9030,15 @@ function TesesPage({pos,teses,qual}){
         ))
       ),
 
-      ticker&&h('div',{className:isEtfT?'mb-4':'grid grid-cols-1 sm:grid-cols-2 gap-5 mb-4'},
+      ticker&&h('div',{className:isEtfT&&!(t.scorecard||[]).length?'mb-4':'grid grid-cols-1 sm:grid-cols-2 gap-5 mb-4'},
         h('div',{className:'card',style:{height:'100%'}},
           h(Shdr,{title:'Qualidade do Dividendo'}),
           h('div',{style:{marginTop:8}},isEtfT?h('div',{style:{fontSize:11,color:'var(--muted)',fontStyle:'italic'}},'N/A — ETFs não têm métricas de qualidade por empresa.'):h(StockDividendQuality,{q:factorsQ||{}}))
         ),
-        !isEtfT&&h('div',{className:'card',style:{height:'100%'}},
-          h(Shdr,{title:'Fundamentais'}),
-          h('div',{style:{marginTop:8}},h(StockFundamentals,{q:factorsQ||{}}))
+        (!isEtfT||(t.scorecard||[]).length>0)&&h('div',{className:'card',style:{height:'100%'}},
+          h(Shdr,{title:(t.scorecard||[]).length?'Fundamentais & Scorecard':'Fundamentais'}),
+          !isEtfT&&h('div',{style:{marginTop:8}},h(StockFundamentals,{q:factorsQ||{}})),
+          h(TesesScorecard,{items:t.scorecard,total:t.scorecardTotal})
         )
       ),
 
@@ -9069,12 +9101,7 @@ function TesesPage({pos,teses,qual}){
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'12. Scorecard',hint:t.scorecardTotal||null}),
-        TesesTable(['Métrica','Score'],(t.scorecard||[]).map(r=>[r.metric,r.score]))
-      ),
-
-      h('div',{className:'card mb-4'},
-        h(Shdr,{title:'13. Decisão Final'}),
+        h(Shdr,{title:'12. Decisão Final'}),
         h('div',{style:{marginTop:8}},
           TesesRow('Rating',t.finalDecision?.rating),
           TesesRow('Fair value',t.finalDecision?.fairValue),
