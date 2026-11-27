@@ -219,7 +219,6 @@ Currently written: JPM, PEP, PG, MAIN, O, KO, XOM, TROW, COR.LS, DG.PA, NOV.DE, 
     "currency": "£"                      // optional: overrides the symbol, otherwise taken from the position (USD → $, else €)
   },
   "thesis": "text; paragraphs separated by \n\n",
-  "business": "text",
   "moat": { "rating": 5, "points": ["…", "…"] },       // rating 1-5
   "mainRisk": "text",
   "strategicResponse": ["…"],
@@ -233,6 +232,12 @@ Currently written: JPM, PEP, PG, MAIN, O, KO, XOM, TROW, COR.LS, DG.PA, NOV.DE, 
   "scorecardTotal": "84 / 100",
   "scorecard": [ { "metric": "Payout Ratio", "score": "10 / 12" } ],     // 12 metrics; the maxima add up to 100
   "finalDecision": { "rating": "BUY / HOLD", "fairValue": "~$94", "dividendYield": "2,41%", "epsGrowth": "4–6%", "divGrowth": "4–6%", "totalReturn": "…" },
+  "swot": {                            // 4 items per quadrant, shown as a 2×2 SWOT matrix
+    "strengths":     [ { "title": "Marca icónica", "note": "A marca de bebidas mais valiosa do mundo." } ],
+    "weaknesses":    [ { "title": "…", "note": "…" } ],
+    "opportunities": [ { "title": "…", "note": "…" } ],
+    "threats":       [ { "title": "…", "note": "…" } ]
+  },
   "keyPhrase": "one-sentence summary",
   "followUpQuestion": "what to monitor, with a keep/review rule",
 
@@ -246,7 +251,7 @@ Currently written: JPM, PEP, PG, MAIN, O, KO, XOM, TROW, COR.LS, DG.PA, NOV.DE, 
 }
 ```
 
-Section order on the Teses page: 1 Tese · 2 Negócio · 3 Moat · 4 Principal Risco · 5 Resposta Estratégica · 6 Financial Quality · 7 Balance Sheet · 8 Growth Thesis · 9 Bear Case · 10 O Que Destruiria a Tese · 11 Valuation · 12 Decisão Final. The `scorecard` (with `scorecardTotal`) is shown inside the **Fundamentais & Scorecard** card near the top, each score coloured by its share of the maximum (≥80% green, ≥60% blue, ≥40% yellow, ≥20% orange, below red). The Factores, Sinais, Qualidade do Dividendo and Fundamentais blocks above them come from `quality`, not from the thesis.
+Section order on the Teses page: 1 Tese · 2 Moat · 3 Principal Risco · 4 Resposta Estratégica · 5 Balance Sheet · 6 Growth Thesis · 7 Bear Case · 8 O Que Destruiria a Tese · 9 Valuation · 10 Decisão Final. `financials` (with `financialsYears`) is shown as a **Financial Quality** table under the Qualidade do Dividendo card. The `scorecard` (with `scorecardTotal`) is shown inside the **Fundamentais & Scorecard** card near the top, each score coloured by its share of the maximum (≥80% green, ≥60% blue, ≥40% yellow, ≥20% orange, below red). The Factores, Sinais, Qualidade do Dividendo and Fundamentais blocks above them come from `quality`, not from the thesis.
 
 Conventions used so far:
 - Text is in European Portuguese. Numbers in strings use a decimal comma (`$2,12`, `2,41%`). Numeric fields (`price`, `yield`, `history`) use JSON numbers with a decimal point.

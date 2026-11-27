@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.26';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.29';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -57,7 +57,6 @@ th{padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;lett
 td{padding:8px 12px;font-size:12px;border-bottom:1px solid var(--s2);vertical-align:middle;}
 tr:last-child td{border-bottom:none;}
 tfoot tr{background:var(--s2);border-top:2px solid var(--border);}
-.tbl-group-hdr{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:6px 12px;}
 tfoot td{font-weight:600;font-size:12px;}
 /* Native <select> dropdown popups otherwise render with the browser's default
    light theme (white background/black text) since inline styles on <select>
@@ -75,10 +74,8 @@ a{color:var(--blue);text-decoration:none;}
 .kpi{position:relative;overflow:hidden;}
 .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
 .kpi-bl::before{background:var(--blue);}
-.kpi-go::before{background:var(--gold);}
 .kpi-gr::before{background:var(--green);}
 .kpi-re::before{background:var(--red);}
-.kpi-or::before{background:var(--orange);}
 
 /* ── Scrollbar hiding (pseudo-element) ── */
 .tabs{-webkit-overflow-scrolling:touch;scrollbar-width:none;}
@@ -109,6 +106,14 @@ a{color:var(--blue);text-decoration:none;}
 /* Dividend calendar: 4 months per row (2 on phones) */
 .cal-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:8px;}
 @media(max-width:640px){.cal-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+/* SWOT matrix (Teses): 2×2 coloured quadrants with axis labels; one column on phones */
+.swot{display:grid;grid-template-columns:52px 1fr 1fr;grid-template-rows:auto auto auto;gap:8px;}
+.swot-head{background:#2b2f36;color:#f3f4f6;border-radius:6px;padding:8px 10px;text-align:center;}
+.swot-side{background:#2b2f36;color:#f3f4f6;border-radius:6px;display:flex;align-items:center;justify-content:center;}
+.swot-side>div{transform:rotate(-90deg);white-space:nowrap;text-align:center;}
+.swot-q{border-radius:6px;padding:14px 14px 16px;color:#16181d;}
+.swot-items{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px;margin-top:10px;}
+@media(max-width:700px){.swot{grid-template-columns:1fr;}.swot-head,.swot-side,.swot-corner{display:none;}.swot-items{grid-template-columns:1fr;}}
 /* Table whose header stays visible while its rows scroll (Quality Score) */
 .sticky-head{max-height:calc(100vh - 120px);overflow:auto !important;}
 .sticky-head thead th{position:sticky;top:0;z-index:2;background:var(--surface);box-shadow:inset 0 -1px 0 var(--border);}
@@ -147,18 +152,14 @@ a{color:var(--blue);text-decoration:none;}
    not have survived the purge.
    Grid-cols utilities THAT DO EXIST (confirmed present below, safe to use):
    grid-cols-1/2/3, sm:grid-cols-2/3/4/5, md:grid-cols-3, lg:grid-cols-4.
-   No divide-x/divide-color utilities exist at all — use .vdivide-r/.vdivide-l
-   (defined further down) or a one-off hand-written class instead.
+   No divide-x/divide-color utilities exist at all — write a one-off
+   hand-written class instead.
    When in doubt: grep this file for the exact class string before using it in
    a className — don't assume any Tailwind utility survived the purge. */
 .gcol-span-2{grid-column:span 1;}
-.gcol-span-6{grid-column:span 1;}
 @media(min-width:640px){
   .gcol-span-2{grid-column:span 2;}
-  .gcol-span-6{grid-column:span 6;}
 }
-.grid-1-2{display:grid;grid-template-columns:1fr;gap:20px;}
-@media(min-width:640px){.grid-1-2{grid-template-columns:1fr 2fr;}}
 /* Income page KPI row: "Total Dividends" spans 2 of 6 columns, the other 4
    cards take 1 each — 2+1+1+1+1=6, matching a 6-column grid exactly. Using
    grid-cols-5 here (as it briefly was) leaves no room for the 5th card,
@@ -235,12 +236,9 @@ a{color:var(--blue);text-decoration:none;}
 .pos{color:var(--green);}
 .neg{color:var(--red);}
 .go{color:var(--gold);}
-.text-pos{color:var(--green);}
-.text-neg{color:var(--red);}
 .text-\[var\(--green\)\]{color:var(--green);}
 .text-\[var\(--red\)\]{color:var(--red);}
 /* ── Utility shorthand classes ── */
-.slbl{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
 .mono-sm{font-family:var(--mono);font-size:11px;}
 .mono-sm-italic{font-family:var(--mono);font-size:10px;font-style:italic;color:var(--muted);}
 .mono-xs-muted{font-family:var(--mono);font-size:9px;color:var(--muted);}
@@ -251,8 +249,6 @@ a{color:var(--blue);text-decoration:none;}
 @media(max-width:640px){.card{padding:14px 14px;border-radius:8px;}}
 .card-table{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
 .card-sm{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;}
-@media(min-width:640px){.vdivide-r{border-right:1px solid var(--border);padding-right:16px;}.vdivide-l{padding-left:16px;}}
-@media(min-width:640px){.col-narrow-third{max-width:33.333%;}}
 .summary-grid-6{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;}
 @media(min-width:640px){.summary-grid-6{grid-template-columns:repeat(3,1fr);}}
 @media(min-width:1024px){.summary-grid-6{grid-template-columns:repeat(6,1fr);}}
@@ -260,7 +256,6 @@ a{color:var(--blue);text-decoration:none;}
 @media(min-width:768px){.portdist-grid{grid-template-columns:repeat(12,1fr);}}
 
 /* ── Section label ── */
-.slbl{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:14px;}
 
 /* ── Mono text helpers ── */
 .mono-sm{font-family:var(--mono);font-size:12px;}
@@ -268,8 +263,6 @@ a{color:var(--blue);text-decoration:none;}
 .mono-sm-gold{font-family:var(--mono);font-size:12px;color:var(--gold);}
 .mono-sm-italic{font-family:var(--mono);font-size:12px;color:var(--muted);font-style:italic;}
 .mono-xs-muted{font-family:var(--mono);font-size:10px;color:var(--muted);}
-.mono-xxs-muted{font-family:var(--mono);font-size:9px;color:var(--muted);}
-.mono-label{font-family:var(--mono);font-size:8px;color:var(--muted);margin-bottom:2px;}
 
 /* ── Plain text helpers ── */
 
@@ -279,7 +272,6 @@ a{color:var(--blue);text-decoration:none;}
 .input-row{background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:10px;}
 
 /* ── Stat cell (goal widget) ── */
-.stat-cell{background:var(--s2);border-radius:5px;padding:6px 8px;}
 
 /* ── Table footer total row ── */
 .tfoot-total{font-weight:700;border-top:2px solid var(--border);}
@@ -620,11 +612,6 @@ const TickerCtx=createContext(()=>{});
 const h=React.createElement;
 
 // ── Utilities ────────────────────────────────────────────────────────────────
-function dlJSON(data,filename){
-  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url);
-}
 function downloadBlob(blob,filename){
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');a.href=url;a.download=filename;a.click();
@@ -1335,11 +1322,6 @@ function whtRateForCountry(cfg,country){
 // Shared SVG donut-path builder used by all pie charts.
 // a1/a2 in radians, ro=outer radius, ri=inner radius, cx/cy=centre.
 // Shared SVG arc path helper — takes degrees, returns a path 'd' string
-function svgArc(cx,cy,r,startDeg,sweepDeg){
-  const s=startDeg*Math.PI/180,e=(startDeg+sweepDeg)*Math.PI/180;
-  const large=sweepDeg>180?1:0;
-  return `M${cx+r*Math.cos(s)} ${cy+r*Math.sin(s)} A${r} ${r} 0 ${large} 1 ${cx+r*Math.cos(e)} ${cy+r*Math.sin(e)}`;
-}
 
 function donutPath(cx,cy,ro,ri,a1,a2){
   const lg=a2-a1>Math.PI?1:0;
@@ -1678,8 +1660,9 @@ function readLegacyPortfolio(data){
   return{positions:active,sold:[...soldBuilt,...explicitSold]};
 }
 const WEALTH_KEYS=['ppr','aforro','depositos','juros','claudiaInvestimentos','carlitosInvestimentos'];
-// An old teses.json is an object of theses; each one has at least one of these sections.
-const THESIS_FIELDS=['name','meta','thesis','business','moat','dividends','financials','keyPhrase','finalDecision'];
+// An old teses.json is an object of theses; each one has at least one of these sections
+// ('business' is no longer shown but still identifies older files).
+const THESIS_FIELDS=['name','meta','thesis','business','moat','dividends','financials','keyPhrase','finalDecision','swot'];
 function looksLikeThesis(entry){return hasAnyKey(entry,THESIS_FIELDS);}
 function hasAnyKey(obj,keys){return keys.some(key=>Object.prototype.hasOwnProperty.call(obj,key));}
 // Reads any file the app has ever exported. Returns {kind, data} where data holds
@@ -2338,8 +2321,6 @@ function PatrimonioPage({wealth,pos,cfg}){
   },0);
 
   /* ── Claudia Investimentos ───────────────────────────────────────────────── */
-  const ciItems=(ci?.investimentos||[]);
-  const caItems=(ca?.investimentos||[]);
   // Investments outside the portfolio (Claudia, Carlitos), respecting the owner filter.
   const invSum=WEALTH_INVESTMENTS.filter(w=>matchOwner(w.owner))
     .map(w=>investmentsSummary(wealth?.[w.key]?.investimentos,pos,cfg))
@@ -2476,9 +2457,6 @@ function PatrimonioPage({wealth,pos,cfg}){
           h('div',{style:{fontWeight:700,color:c.color}},pctTxt(v,t)),
           h('div',{className:'text-[11px] text-[var(--muted)] font-mono'},fm(v))
         ):h('span',{style:{color:'var(--muted)'}},'—'));
-      const bar=(vals,t)=>h('div',{style:{display:'flex',height:8,minWidth:140,borderRadius:4,overflow:'hidden',background:'var(--s2)',gap:1}},
-        cats.filter(c=>vals[c.key]>0).map(c=>h('div',{key:c.key,title:c.label+': '+pctTxt(vals[c.key],t),
-          style:{width:(vals[c.key]/t*100)+'%',background:c.color}})));
       return h('div',{className:'mb-8'},
         h(Shdr,{title:'Distribuição de Ativos por Investidor'}),
         h('div',{className:'flex gap-4 flex-wrap mb-2 text-[11px] text-[var(--muted)]'},
@@ -2976,16 +2954,14 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
   const[ctryFlt,setCtryFlt]=useState('ALL');
 
   /* ── Tax Rules ── */
-  const[divTaxRate,setDivTaxRate]=useState((cfg?.taxRate||0.28)*100);
+  const divTaxRate=(cfg?.taxRate||0.28)*100;
 
   const TAX_RATE=divTaxRate/100;
 
   /* Compute CG rate based on holding period (tiered, Portuguese IRS) —
      wraps the shared top-level cgRateForHoldingBase (single source of truth). */
-  const cgRateForHolding=years=>cgRateForHoldingBase(years,TAX_RATE);
 
   // Use shared top-level calcHoldingYears; default to 0 if null (no dates available)
-  const holdingYears=(entry,exit)=>calcHoldingYears(entry,exit)??0;
 
   /* Withholding tax rates by country flag — wraps the shared top-level
      whtRateForCountry, which reads cfg.whtByCountry (the same source of truth
@@ -3100,7 +3076,6 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
     },0)
   ,[wealthJuros,year,cfg,TAX_RATE]);
 
-  const totalTax=cgTotals.tax+divTotal.taxLocal+jurosTaxTotal;
 
   const fe=v=>'\u20ac'+Math.abs(v).toFixed(2);
   const fp=v=>{ const s=v>=0?'+':'-'; return s+'\u20ac'+Math.abs(v).toFixed(2); };
@@ -3167,12 +3142,7 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
       const menosValias=Math.abs(losses.reduce((s,r)=>s+r.plEur,0));
       const dividendos=divTotal.gross;
       const juros=(wealthJuros||[]).reduce((s,r)=>s+yearVal(r,year),0);
-      const taxRate=TAX_RATE;
       const withheld=divTotal.withheld;
-      const winRate=cgRows.length>0?wins.length/cgRows.length:0;
-      const roi=cgTotals.cost>0?(cgTotals.pl)/cgTotals.cost:0;
-      const avgWin=wins.length>0?maisValias/wins.length:0;
-      const avgLoss=losses.length>0?menosValias/losses.length:0;
 
       return h('div',{style:{marginBottom:28}},
         /* Row 1 */
@@ -3616,7 +3586,7 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
             )
           )),
           h('tbody',null,
-            reembolsoByCountry.map(c=>h('tr',{key:c.flag,className:'border-b border-[var(--s2)]'},
+            reembolsoByCountry.map(c=>h('tr',{key:c.flag,className:'border-b',style:{borderColor:'var(--s2)'}},
               h('td',{style:{padding:'8px 8px'}},h('span',{style:{fontSize:18,marginRight:6}},c.flag),c.name),
               h('td',{style:{padding:'8px 8px',fontSize:10,color:'var(--muted)'}},c.tickers.join(' · ')),
               h('td',{style:{padding:'8px 8px',textAlign:'right'}},fpc(c.rate)),
@@ -3921,7 +3891,6 @@ function StockModal({ticker,pos,sold,income,qual,cfg,onClose}){
   const qm=buildQualMap(qual||[]);
   const q=getQual(qm,p.t)||{};
   const fifo=fifoEngine(p.transactions||[]);
-  const fx=cfg?.fxEurUsd||1.08;
   const country=p.country||(cfg?.posCountry||{})[p.t]||'🌐';
   const whtInfo=(cfg?.whtByCountry||{})[country]||{};
   const whtRate=whtInfo.treaty??whtInfo.domestic??0;
@@ -3945,14 +3914,13 @@ function StockModal({ticker,pos,sold,income,qual,cfg,onClose}){
   const realizedPL=fifo.sells.reduce((s,sl)=>s+sl.realPL,0);
   const cumDiv=isSold?getSoldDivTotal(p):getIncome(income,p.t);
   const totalReturn=isSold?(realizedPL+cumDiv):(unrealizedPL+cumDiv);
-  const origCostBasis=isSold?(p.n||shares)*avCost:costBasis; // for sold, p.n now 0, use original avg cost × original qty via transactions
+   // for sold, p.n now 0, use original avg cost × original qty via transactions
   const soldQty=p.transactions?.filter(t=>t.type==='buy').reduce((s,t)=>s+t.n,0)||p.n||0;
   const soldCostBasis=soldQty*avCost;
   const totalReturnPct=isSold?(soldCostBasis>0?totalReturn/soldCostBasis:0):(costBasis>0?totalReturn/costBasis:0);
 
   // ── Section 4: Income & Dividends ──
   const dy=q.dy;
-  const chowder=dy!=null&&q.g5!=null?dy+q.g5:null;
   const curYear=new Date().getFullYear();
   const annualIncomeEst=dy>0?dy*shares*curPrice:(getIncomeYear(income,p.t,curYear-1)||0);
   const yoc=avCost>0&&dy>0?dy*curPrice/avCost:0;
@@ -3973,7 +3941,6 @@ function StockModal({ticker,pos,sold,income,qual,cfg,onClose}){
   const tierLabel=holdingYears==null?'—':holdingYears<2?'< 2 anos (28%)':holdingYears<5?'2–5 anos (25.2%)':holdingYears<8?'5–8 anos (22.4%)':'> 8 anos (19.6%)';
 
   // ── Section 8: Signals ──
-  const g1=q.g1,g5=q.g5;
 
   const sortedTx=(p.transactions||[]).map((tx,index)=>({tx,index}))
     .sort((a,b)=>b.tx.date.localeCompare(a.tx.date)||a.index-b.index);
@@ -4536,7 +4503,6 @@ function App(){
       r.fee.toFixed(2),r.total.toFixed(2),r.sym,r.status,r.broker));
 
     // ── Shared tax helpers (mirror TaxCalcPage's logic — single source of truth is cfg) ──
-    const fxRate=cfgData.fxEurUsd||1.08;
     const TAX_RATE_CFG=cfgData.taxRate||0.28;
     const whtRateForCsv=country=>whtRateForCountry(cfgData,country);
     const tickerCountryMap=(()=>{
@@ -4548,7 +4514,6 @@ function App(){
       });
       return m;
     })();
-    const cgRateForHoldingCsv=yrs=>cgRateForHoldingBase(yrs,TAX_RATE_CFG);
 
     // All capital-gains sale events across every year (mirrors TaxCalcPage's cgRows, year filter removed).
     // pl/tax are converted to EUR immediately so every downstream sheet (Tax by Year, Anexo J)
@@ -4609,7 +4574,7 @@ function App(){
     const taxByYearHeaders=row('Year','Div Gross','Div WHT Paid','Div IRS','Juros Gross','Juros IRS',
       'Capital Gains (net)','Capital Gains IRS','Total Income','Total IRS','Total Tax (WHT+IRS)');
     const taxByYearRows=TAX_YEARS.map(y=>{
-      let whtPaid=0,irsDiv=0,totalDiv=0,totalJuros=0,irsJuros=0,totalGains=0,netGainEur=0;
+      let whtPaid=0,irsDiv=0,totalDiv=0,totalJuros=0,irsJuros=0,totalGains=0;
       const ys=String(y);
       allDivRows.filter(r=>r.year===ys).forEach(r=>{
         totalDiv+=r.grossEUR; whtPaid+=r.withheld; irsDiv+=r.taxLocal;
@@ -4617,7 +4582,6 @@ function App(){
       (wData.juros||[]).forEach(r=>{ const j=r[ys]||0; if(j){ totalJuros+=j; irsJuros+=j*TAX_RATE_CFG; } });
       (wData.aforro||[]).forEach(r=>{ const j=r[ys]||0; if(j){ totalJuros+=j; irsJuros+=j*TAX_RATE_CFG; } });
       allCgRows.filter(r=>r.date.startsWith(ys)).forEach(r=>{
-        netGainEur+=r.pl;
         totalGains+=r.pl>0?r.pl:0;
       });
       const irsGains=capitalGains.taxByYear[ys]||0;
@@ -4903,14 +4867,12 @@ const DonutChart=memo(function DonutChart({pos,cfg,compact=false,half=false}){
   },[pos]);
 
   // Uses shared top-level svgArc utility
-  const arc=svgArc;
 
   function labelPos(startDeg,sweepDeg,r){
     const mid=(startDeg+sweepDeg/2)*Math.PI/180;
     return{x:CX_A+r*Math.cos(mid),y:CY_A+r*Math.sin(mid)};
   }
 
-  const tv=useMemo(()=>pos.reduce((s,p)=>s+cx(p).val,0),[pos]);
   const hovSlice=hov!=null?slices.find(s=>s.t===hov):null;
 
   const SIZE_ACTUAL=compact?220:(half?290:SIZE);
@@ -5072,7 +5034,6 @@ function Dash({pos,qual,income,sold,cfg,setCfg,wealth}){
     const totDivEUR=pos.filter(p=>hasDividend(p,qm,income)&&p.cat!=='USD').reduce((s,p)=>s+getIncome(income,p.t),0);
     return{tv,tc,pl,plp,iu,ie,ietf,sectors,top10,avgYoc,avgYield,valUSD,valEUR,valEtfEq,valEtfBo,costUSD,costEUR,costETF,plUSD,plEUR,plEtfEq,plEtfBo,sectorPL:smPL,grandDivUSD:totDivUSD+soldDivUSD,grandDivEUR:totDivEUR+soldDivEUR,totDivUSD,soldDivUSD,totDivEUR,soldDivEUR};
   },[pos,qual,income,sold]);
-  const{stk,etfs}=useMemo(()=>pos.reduce((a,p)=>{p.cat==='ETF'?a.etfs++:a.stk++;return a;},{stk:0,etfs:0}),[pos]);
 
   /* ── Performance Metrics: trailing CAGR ─────────────────────────────────
      Fixes applied per audit (Critical #4, #8):
@@ -5807,9 +5768,6 @@ function Port({pos,setPos,income,qual,setQual,cfg,sold,setSold}){
   const SA=f=>sf===f?(sd==='desc'?' ↓':' ↑'):'';
   const TH=({f,label,align})=>h('th',{className:'srt cursor-pointer hover:text-slate-200',style:align?{textAlign:align}:{},onClick:()=>ts(f)},label+SA(f));
 
-  const upd=(id,fld,v)=>setPos(prev=>
-    prev.map(p=>(p.id||p.t)===id?{...p,[fld]:parseFloat(v)||0}:p)
-  );
   return h('div',null,
     /* ── P/L summary row — first thing on the Holdings page ── */
     h('div',{className:'grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4'},
@@ -5837,8 +5795,6 @@ function Port({pos,setPos,income,qual,setQual,cfg,sold,setSold}){
         /* 4th card — position counter */
         (()=>{
           const activeCount=(pos||[]).filter(p=>p.n>0).length;
-          const closedCount=(sold||[]).length;
-          const sectorSet=new Set((pos||[]).filter(p=>p.n>0&&p.sec).map(p=>p.sec));
           return h('div',{key:'positions',style:{background:'var(--surface)',border:'1px solid var(--border)',
             borderLeft:'3px solid var(--blue)',borderRadius:6,padding:'14px 18px'}},
             h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}},
@@ -6836,7 +6792,7 @@ function TxAccordion({p,setPos,cfg,isSold}){
   const transactions=p.transactions||[];
   const brokerList=brokerListOf(cfg);
   const hasTx=transactions.length>0;
-  const{lots,sells,n,av}=useMemo(()=>fifoEngine(transactions),[p.transactions]);
+  const{sells,n,av}=useMemo(()=>fifoEngine(transactions),[p.transactions]);
   const txsSorted=useMemo(()=>transactions.map((tx,index)=>({tx,index}))
     .sort((a,b)=>a.tx.date.localeCompare(b.tx.date)||a.index-b.index)
     .map(({tx,index})=>({...tx,origIdx:index})),[p.transactions]);
@@ -7305,13 +7261,6 @@ function Income({pos,setPos,income,qual,setQual,sold,cfg,initialTab}){
   ),[soldEUR]);
 
   /* Total dividends received since inception (open + sold positions) */
-  const grandDiv=useMemo(()=>{
-    const soldDivUSD=soldUSD.reduce((s,p)=>s+getSoldDivTotal(p),0);
-    const soldDivEUR=soldEUR.reduce((s,p)=>s+getSoldDivTotal(p),0);
-    const openDivUSD=stocksUSD.reduce((s,p)=>s+getIncome(income,p.t),0);
-    const openDivEUR=stocksEUR.reduce((s,p)=>s+getIncome(income,p.t),0);
-    return{usd:openDivUSD+soldDivUSD,eur:openDivEUR+soldDivEUR};
-  },[soldUSD,soldEUR,stocksUSD,stocksEUR,income]);
 
   // ── Qual editing (moved from Qualidade page) ─────────────────────────────
 
@@ -7807,15 +7756,11 @@ function AnalyticsPage({pos,qual,income,sold,cfg,wealth}){
   const[portInfl,setPortInfl]=useState(3.0);
   const[portGoal,setPortGoal]=useState(()=>cfg?.portfolioGoal||100000);
   const qualMap=useMemo(()=>buildQualMap(qual),[qual]);
-  const stocks=useMemo(()=>pos.filter(p=>p.cat!=='ETF'),[pos]);
 
   // Portfolio metrics — use ALL positions (incl. ETFs) to match homepage
   const allCalcs=useMemo(()=>pos.map(p=>({p,c:cx(p,getQual(qualMap,p.t)?.dy)})),[pos,qualMap]);
   const tv=useMemo(()=>allCalcs.reduce((s,{c})=>s+c.val,0),[allCalcs]);
-  const tc=useMemo(()=>allCalcs.reduce((s,{c})=>s+c.cost,0),[allCalcs]);
-  const pl=tv-tc;
 
-  const pct=v=>v!=null?(v*100).toFixed(1)+'%':'—';
 
   // Monthly dividend estimate (same dy×n×cv formula used on the homepage PADI card)
   const monthlyEUR=useMemo(()=>{
@@ -8632,12 +8577,9 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
   const[incSortDir,setIncSortDir]=useState('desc');
   // Per-ticker annual income (2025 = current year)
   // ── Qualidade state (moved from Qual page) ─────────────────────────────
-  const[sf,setSf]=useState('sc');
-  const[sd,setSd]=useState('desc');
 
   const qualMap=useMemo(()=>buildQualMap(qual),[qual]);
   const stocks=useMemo(()=>pos.filter(p=>hasDividend(p,qualMap,income)),[pos,qualMap,income]);
-  const totalInc2025=useMemo(()=>stocks.reduce((s,p)=>s+getIncomeYear(income,p.t,2025),0),[stocks,income]);
   // Precomputed USD/EUR splits used in KPIs and Row 0
   const stocksUSD_div=useMemo(()=>stocks.filter(p=>p.cat==='USD'),[stocks]);
   const stocksEUR_div=useMemo(()=>stocks.filter(p=>p.cat!=='USD'),[stocks]);
@@ -8652,13 +8594,6 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
   const allEUR_div=useMemo(()=>allWithDiv.filter(p=>p.cat!=='USD'),[allWithDiv]);
 
   // Per-ticker 2025 income for diversification donut + bars
-  const byTicker=useMemo(()=>{
-    const items=stocks.map(p=>{
-      const inc=getIncomeYear(income,p.t,2025);
-      return{t:p.t,cat:p.cat,inc,pct:totalInc2025>0?inc/totalInc2025:0};
-    }).filter(x=>x.inc>0).sort((a,b)=>b.inc-a.inc);
-    return items;
-  },[stocks,income,totalInc2025]);
 
   // Yield/Payout bars per ticker (USD stocks with quality data)
   const yieldBars=useMemo(()=>{
@@ -8679,35 +8614,14 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
 
 
   // Colour palette for donut
-  const PAL=CHART_PALETTE;
 
   const[hov,setHov]=useState(null);
-  const SIZE=240,CX=120,CY=120,RO=104,RI=62;
 
   // Uses shared top-level svgArc utility
-  const arc=svgArc;
 
-  const donutSlices=useMemo(()=>{
-    let angle=-90;
-    return byTicker.map((p,i)=>{
-      const sweep=p.pct*360;
-      const start=angle;
-      angle+=sweep;
-      return{...p,start,sweep,color:PAL[i%PAL.length]};
-    });
-  },[byTicker]);
 
-  const hovSlice=hov!=null?donutSlices.find(s=>s.t===hov):null;
 
-      const ts=f=>{if(sf===f)setSd(d=>d==='desc'?'asc':'desc');else{setSf(f);setSd('desc');}};
 
-  const posMap=useMemo(()=>buildPosMap(pos),[pos]);
-  const sorted=useMemo(()=>[...qual].sort((a,b)=>{
-    let va=a[sf],vb=b[sf];
-    const inf=sd==='desc'?-Infinity:Infinity;
-    if(va==null)va=inf;if(vb==null)vb=inf;
-    return sd==='desc'?vb-va:va-vb;
-  }),[qual,sf,sd]);
 
 
 
@@ -8768,9 +8682,7 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
       const addS2=(t,sb)=>Object.fromEntries(YEARS.map(y=>[y,(t[y]||0)+(sb[y]||0)]));
       const tUf2=addS2(tU2,sBy2.USD);const tEf2=addS2(tE2,sBy2.EUR);
       const totByY=y=>(tUf2[y]||0)+(tEf2[y]||0);
-      const curY=String(new Date().getFullYear());
-      const prevY=String(new Date().getFullYear()-1);
-      const t0=totByY(prevY);const t1=totByY(curY)||totByY(prevY);
+      
       /* use last COMPLETED year as baseline — skip current year if <80% of prev */
       const prevYearTotal=totByY(String(CUR_YEAR-1));
       const curYearTotal=totByY(String(CUR_YEAR));
@@ -9194,7 +9106,7 @@ function TesesTable(headers,rows){
   return h('div',{className:'card-table overflow-x-auto',style:{marginTop:8}},
     h('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:12}},
       h('thead',null,h('tr',null,headers.map((hd,i)=>h('th',{key:i,className:i===0?'text-left':'text-right',style:{padding:'6px 8px'}},hd)))),
-      h('tbody',null,rows.map((r,i)=>h('tr',{key:i,className:'border-t border-[var(--s2)]'},
+      h('tbody',null,rows.map((r,i)=>h('tr',{key:i,className:'border-t',style:{borderColor:'var(--s2)'}},
         r.map((c,j)=>h('td',{key:j,className:j===0?'text-left':'text-right',style:{padding:'6px 8px'}},c==null||c===''?'—':c))
       )))
     )
@@ -9229,6 +9141,44 @@ function TesesScorecard({items,total}){
         h('span',{style:{textAlign:'right',fontWeight:700,fontFamily:'var(--mono)',color:col}},it.score||'—')
       );
     })
+  );
+}
+// ── SWOT (thesis.swot = { strengths, weaknesses, opportunities, threats }: 4 × {title, note}) ──
+const SWOT_Q={
+  strengths:{label:'Forças',bg:'#f4bf5f',icon:'★'},
+  weaknesses:{label:'Fraquezas',bg:'#5fa4a3',icon:'▼'},
+  opportunities:{label:'Oportunidades',bg:'#5aaed8',icon:'↗'},
+  threats:{label:'Ameaças',bg:'#eb6f5a',icon:'⚠'},
+};
+function TesesSwot({swot}){
+  if(!swot||!['strengths','weaknesses','opportunities','threats'].some(k=>(swot[k]||[]).length))return null;
+  const item=(it,icon,i)=>{
+    const title=typeof it==='string'?it:it?.title;
+    const note=typeof it==='string'?null:it?.note;
+    return h('div',{key:i,style:{display:'flex',gap:8,alignItems:'flex-start'}},
+      h('div',{style:{width:26,height:26,flexShrink:0,borderRadius:'50%',border:'1.5px solid rgba(22,24,29,.75)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700}},icon),
+      h('div',null,
+        h('div',{style:{fontSize:12,fontWeight:800,lineHeight:1.25}},title),
+        note&&h('div',{style:{fontSize:11,lineHeight:1.35,marginTop:2,opacity:.85}},note)
+      )
+    );
+  };
+  const quad=k=>{
+    const q=SWOT_Q[k];
+    return h('div',{key:k,className:'swot-q',style:{background:q.bg}},
+      h('div',{style:{fontSize:20,fontWeight:800,textAlign:'center',letterSpacing:'-.01em'}},q.label),
+      h('div',{className:'swot-items'},(swot[k]||[]).slice(0,4).map((it,i)=>item(it,q.icon,i)))
+    );
+  };
+  const head=(a,b)=>h('div',{className:'swot-head'},h('div',{style:{fontSize:14,fontWeight:700}},a),h('div',{style:{fontSize:10,opacity:.8}},b));
+  const side=(a,b)=>h('div',{className:'swot-side'},h('div',null,h('div',{style:{fontSize:13,fontWeight:700}},a),h('div',{style:{fontSize:9,opacity:.8}},b)));
+  return h('div',{className:'card mb-4'},
+    h(Shdr,{title:'Análise SWOT',hint:'Forças e fraquezas: internas · oportunidades e ameaças: externas'}),
+    h('div',{className:'swot',style:{marginTop:10}},
+      h('div',{className:'swot-corner'}),head('Útil','para atingir o objectivo'),head('Prejudicial','para atingir o objectivo'),
+      side('Origem interna','atributos da empresa'),quad('strengths'),quad('weaknesses'),
+      side('Origem externa','atributos do contexto'),quad('opportunities'),quad('threats')
+    )
   );
 }
 function TesesList(items,color){
@@ -9383,9 +9333,17 @@ function TesesPage({pos,teses,qual}){
       ),
 
       ticker&&h('div',{className:isEtfT&&!(t.scorecard||[]).length?'mb-4':'grid grid-cols-1 sm:grid-cols-2 gap-5 mb-4'},
-        h('div',{className:'card',style:{height:'100%'}},
-          h(Shdr,{title:'Qualidade do Dividendo'}),
-          h('div',{style:{marginTop:8}},isEtfT?h('div',{style:{fontSize:11,color:'var(--muted)',fontStyle:'italic'}},'N/A — ETFs não têm métricas de qualidade por empresa.'):h(StockDividendQuality,{q:factorsQ||{}}))
+        // Left column: dividend quality, then the thesis' financial quality table under it.
+        h('div',{style:{display:'flex',flexDirection:'column',gap:20}},
+          h('div',{className:'card'},
+            h(Shdr,{title:'Qualidade do Dividendo'}),
+            h('div',{style:{marginTop:8}},isEtfT?h('div',{style:{fontSize:11,color:'var(--muted)',fontStyle:'italic'}},'N/A — ETFs não têm métricas de qualidade por empresa.'):h(StockDividendQuality,{q:factorsQ||{}}))
+          ),
+          (t.financials||[]).length>0&&h('div',{className:'card',style:{flex:1}},
+            h(Shdr,{title:'Financial Quality'}),
+            TesesTable(['Métrica',...(t.financialsYears||['—','—','—'])],
+              (t.financials||[]).map(r=>[r.metric,...r.values]))
+          )
         ),
         (!isEtfT||(t.scorecard||[]).length>0)&&h('div',{className:'card',style:{height:'100%'}},
           h(Shdr,{title:(t.scorecard||[]).length?'Fundamentais & Scorecard':'Fundamentais'}),
@@ -9393,6 +9351,8 @@ function TesesPage({pos,teses,qual}){
           h(TesesScorecard,{items:t.scorecard,total:t.scorecardTotal})
         )
       ),
+
+      h(TesesSwot,{swot:t.swot}),
 
       t.dividends&&h(TesesDividends,{key:ticker,data:t.dividends}),
 
@@ -9402,58 +9362,47 @@ function TesesPage({pos,teses,qual}){
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'2. O Negócio'}),
-        h('p',{style:{fontSize:13,lineHeight:1.6,marginTop:8,whiteSpace:'pre-wrap'}},t.business||'Por preencher.')
-      ),
-
-      h('div',{className:'card mb-4'},
-        h(Shdr,{title:'3. Moat / Vantagem Competitiva',hint:t.moat?.rating!=null?('Moat: '+convStars(t.moat.rating)):null}),
+        h(Shdr,{title:'2. Moat / Vantagem Competitiva',hint:t.moat?.rating!=null?('Moat: '+convStars(t.moat.rating)):null}),
         h('div',{style:{marginTop:8}},TesesList(t.moat?.points))
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'4. Principal Risco'}),
+        h(Shdr,{title:'3. Principal Risco'}),
         h('p',{style:{fontSize:13,lineHeight:1.6,marginTop:8,whiteSpace:'pre-wrap'}},t.mainRisk||'Por preencher.')
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'5. Resposta Estratégica'}),
+        h(Shdr,{title:'4. Resposta Estratégica'}),
         h('div',{style:{marginTop:8}},TesesList(t.strategicResponse))
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'6. Financial Quality'}),
-        TesesTable(['Métrica',...(t.financialsYears||['—','—','—'])],
-          (t.financials||[]).map(r=>[r.metric,...r.values]))
-      ),
-
-      h('div',{className:'card mb-4'},
-        h(Shdr,{title:'7. Balance Sheet'}),
+        h(Shdr,{title:'5. Balance Sheet'}),
         h('p',{style:{fontSize:13,lineHeight:1.6,marginTop:8,whiteSpace:'pre-wrap'}},t.balanceSheet||'Por preencher.')
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'8. Growth Thesis'}),
+        h(Shdr,{title:'6. Growth Thesis'}),
         h('p',{style:{fontSize:13,lineHeight:1.6,marginTop:8,whiteSpace:'pre-wrap'}},t.growthThesis||'Por preencher.')
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'9. Bear Case'}),
+        h(Shdr,{title:'7. Bear Case'}),
         h('div',{style:{marginTop:8}},TesesList(t.bearCase,'var(--red)'))
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'10. O Que Destruiria a Tese?'}),
+        h(Shdr,{title:'8. O Que Destruiria a Tese?'}),
         h('div',{style:{marginTop:8}},TesesList(t.whatWouldBreakThesis,'var(--red)'))
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'11. Valuation'}),
+        h(Shdr,{title:'9. Valuation'}),
         TesesTable(['Cenário','EPS','P/E','Fair Value'],(t.valuation||[]).map(r=>[r.scenario,r.eps,r.pe,r.fairValue]))
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'12. Decisão Final'}),
+        h(Shdr,{title:'10. Decisão Final'}),
         h('div',{style:{marginTop:8}},
           TesesRow('Rating',t.finalDecision?.rating),
           TesesRow('Fair value',t.finalDecision?.fairValue),
@@ -9532,7 +9481,7 @@ function SoldPage({sold,setSold,cfg}){
         const sym=currencySymbol(p.cat);
         const summary=getSoldSummary(p);
         const av=summary.quantity>0?summary.costBasis/summary.quantity:getAv(p);
-        const cost=summary.costBasis,real=summary.proceeds,pl=summary.pl,plp=cost>0?pl/cost:null;
+        const cost=summary.costBasis,pl=summary.pl,plp=cost>0?pl/cost:null;
         const div=getSoldDivTotal(p);
         const total=pl+div;
         const totalp=cost>0?total/cost:null;
