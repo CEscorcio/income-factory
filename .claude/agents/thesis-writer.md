@@ -23,9 +23,8 @@ The page renders, in order:
 10. Bear Case
 11. O Que Destruiria a Tese
 12. Valuation
-13. Faixas de Decisão
-14. Scorecard
-15. Decisão Final
+13. Scorecard
+14. Decisão Final
 
 A missing section simply doesn't render, so leave out what you can't support rather than padding it.
 

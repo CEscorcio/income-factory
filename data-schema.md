@@ -227,7 +227,6 @@ Currently written: JPM, PEP, PG, MAIN, O, KO, XOM, TROW, COR.LS, DG.PA, NOV.DE, 
   "bearCase": ["…"],
   "whatWouldBreakThesis": ["…"],
   "valuation": [ { "scenario": "Bear|Base|Bull", "eps": "$2,70", "pe": "22x", "fairValue": "$59" } ],
-  "decisionRanges": [ { "price": "< $65", "decision": "Strong Buy" } ],
   "scorecardTotal": "84 / 100",
   "scorecard": [ { "metric": "Payout Ratio", "score": "10 / 12" } ],     // 12 metrics; the maxima add up to 100
   "finalDecision": { "rating": "BUY / HOLD", "fairValue": "~$94", "dividendYield": "2,41%", "epsGrowth": "4–6%", "divGrowth": "4–6%", "totalReturn": "…" },
@@ -244,7 +243,7 @@ Currently written: JPM, PEP, PG, MAIN, O, KO, XOM, TROW, COR.LS, DG.PA, NOV.DE, 
 }
 ```
 
-Section order on the Teses page: 1 Tese · 2 Negócio · 3 Moat · 4 Principal Risco · 5 Resposta Estratégica · 6 Financial Quality · 7 Balance Sheet · 8 Dividend Thesis · 9 Growth Thesis · 10 Bear Case · 11 O Que Destruiria a Tese · 12 Valuation · 13 Faixas de Decisão · 14 Scorecard · 15 Decisão Final. The Factores, Sinais, Qualidade do Dividendo and Fundamentais blocks above them come from `quality`, not from the thesis.
+Section order on the Teses page: 1 Tese · 2 Negócio · 3 Moat · 4 Principal Risco · 5 Resposta Estratégica · 6 Financial Quality · 7 Balance Sheet · 8 Dividend Thesis · 9 Growth Thesis · 10 Bear Case · 11 O Que Destruiria a Tese · 12 Valuation · 13 Scorecard · 14 Decisão Final. The Factores, Sinais, Qualidade do Dividendo and Fundamentais blocks above them come from `quality`, not from the thesis.
 
 Conventions used so far:
 - Text is in European Portuguese. Numbers in strings use a decimal comma (`$2,12`, `2,41%`). Numeric fields (`price`, `yield`, `history`) use JSON numbers with a decimal point.
