@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-25.7';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.7';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -102,6 +102,9 @@ a{color:var(--blue);text-decoration:none;}
 .toast{position:fixed;bottom:24px;right:24px;background:#238636;color:#fff;padding:8px 16px;border-radius:6px;font-size:12px;font-weight:600;z-index:9999;pointer-events:none;}
 
 /* ── Top navigation bar ── */
+/* Table whose header stays visible while its rows scroll (Quality Score) */
+.sticky-head{max-height:calc(100vh - 120px);overflow:auto !important;}
+.sticky-head thead th{position:sticky;top:0;z-index:2;background:var(--surface);box-shadow:inset 0 -1px 0 var(--border);}
 .bar{
   display:flex;align-items:center;gap:8px;
   padding:0 12px;min-height:48px;
@@ -812,9 +815,9 @@ const DCFG={
     {icon:"📈",label:"Investments",amount:400}
   ],
   benchmarkCache:{
-    sp500:{byYear:{"2023":0.2629,"2024":0.2502,"2025":0.1788,"2026 YTD":0.0998}},
-    msciWorld:{byYear:{"2023":0.2379,"2024":0.1867,"2025":0.2109,"2026 YTD":0.0985}},
-    asOf:'2026-07-03'
+    sp500:{byYear:{"2023":0.2629,"2024":0.2502,"2025":0.1788,"2026 YTD":0.0601}},
+    msciWorld:{byYear:{"2023":0.2379,"2024":0.1867,"2025":0.2109,"2026 YTD":0.052}},
+    asOf:'2026-11-25'
   },
   // Default WHT-by-country treaty table — previously this key had NO default
   // anywhere, so if it was ever missing (fresh install, data reset, or a
@@ -1518,7 +1521,7 @@ function validateImportedConfig(value){
 }
 function validateImportedWealth(value){
   requireJsonRecord(value,'wealth');
-  if(!['ppr','aforro','depositos','juros','claudiaInvestimentos'].some(key=>Object.prototype.hasOwnProperty.call(value,key)))throw new Error('Não foram encontrados dados de património.');
+  if(!['ppr','aforro','depositos','juros','claudiaInvestimentos','carlitosInvestimentos'].some(key=>Object.prototype.hasOwnProperty.call(value,key)))throw new Error('Não foram encontrados dados de património.');
   ['ppr','aforro','depositos','juros'].forEach(key=>{
     if(value[key]!==undefined&&!Array.isArray(value[key]))throw new Error(`${key} deve ser uma lista.`);
   });
@@ -1652,7 +1655,7 @@ function readLegacyPortfolio(data){
   const explicitSold=(data.sold||[]).filter(s=>!soldBuilt.find(x=>x.t===s.t));
   return{positions:active,sold:[...soldBuilt,...explicitSold]};
 }
-const WEALTH_KEYS=['ppr','aforro','depositos','juros','claudiaInvestimentos'];
+const WEALTH_KEYS=['ppr','aforro','depositos','juros','claudiaInvestimentos','carlitosInvestimentos'];
 // An old teses.json is an object of theses; each one has at least one of these sections.
 const THESIS_FIELDS=['name','meta','thesis','business','moat','dividends','financials','keyPhrase','finalDecision'];
 function looksLikeThesis(entry){return hasAnyKey(entry,THESIS_FIELDS);}
@@ -1873,6 +1876,47 @@ function priceFreshness(position){
   const when=asOf?`de ${asOf}${age!==null?` (${age} dia${age===1?'':'s'})`:''}`:'sem data';
   return{live:false,title:`Preço não live: ${source}, ${when}.`};
 }
+// Current price for tickers held outside the portfolio (wealth.claudiaInvestimentos,
+// carlitosInvestimentos…): an active position's price if there is one, otherwise
+// cfg.refPrices[ticker] (kept up to date by Config → Cotações online).
+function referencePrice(ticker,pos,cfg){
+  const p=(pos||[]).find(x=>x.t===ticker&&x.cv>0);
+  if(p)return{cv:p.cv,cvAsOf:p.cvAsOf||null,cvSource:p.cvSource||null};
+  const r=cfg?.refPrices?.[ticker];
+  return r&&r.cv>0?{cv:r.cv,cvAsOf:r.asOf||null,cvSource:r.source||null}:null;
+}
+// Tickers held in wealth sections (…Investimentos) that are not active positions.
+function referenceTickers(wealth,pos,cfg){
+  const held=new Set((pos||[]).filter(p=>p.n==null||p.n>0).map(p=>p.t));
+  const out=new Set(Object.keys(cfg?.refPrices||{}));
+  Object.entries(wealth||{}).forEach(([key,section])=>{
+    if(/Investimentos$/.test(key)&&Array.isArray(section?.investimentos))section.investimentos.forEach(r=>{if(r&&r.ticker)out.add(r.ticker);});
+  });
+  return[...out].filter(t=>!held.has(t));
+}
+// Wealth sections holding lots bought outside the main portfolio, and their owner.
+const WEALTH_INVESTMENTS=[
+  {key:'claudiaInvestimentos',owner:'Claudia',label:'Claudia Investimentos'},
+  {key:'carlitosInvestimentos',owner:'Carlitos',label:'Carlitos Investimentos'},
+];
+// One lot: units = invested / purchase price; current value needs a price
+// (referencePrice). Without a price the value falls back to the amount invested.
+function investmentLot(r,pos,cfg){
+  const ref=referencePrice(r.ticker,pos,cfg);
+  const cv=ref?.cv??null;
+  const units=r.precoCompra&&r.valorInvestido?r.valorInvestido/r.precoCompra:null;
+  const currentVal=units&&cv?units*cv:null;
+  const pl=currentVal!=null?currentVal-r.valorInvestido:null;
+  const plp=pl!=null&&r.valorInvestido?pl/r.valorInvestido:null;
+  return{ref,cv,units,currentVal,value:currentVal??(r.valorInvestido||0),pl,plp};
+}
+function investmentsSummary(items,pos,cfg){
+  return(items||[]).reduce((acc,r)=>{
+    const lot=investmentLot(r,pos,cfg);
+    acc.value+=lot.value;acc.cost+=r.valorInvestido||0;acc.pl=acc.value-acc.cost;
+    return acc;
+  },{value:0,cost:0,pl:0});
+}
 // Amber dot next to a price that is not live.
 function StaleDot({p}){
   const f=priceFreshness(p);
@@ -1936,7 +1980,8 @@ function PatrimonioPage({wealth,pos,cfg}){
   const depositosSorted=useMemo(()=>[...depositos].sort((a,b)=>{const da=a.endDate||'9999',db=b.endDate||'9999';return da<db?-1:da>db?1:0;}),[depositos]);
   const juros  = (wealth||{}).juros  || [];
   const ci=(wealth||{}).claudiaInvestimentos;
-  const empty=!ppr.length&&!aforro.length&&!depositos.length&&!ci&&!(pos||[]).some(p=>p.n>0);
+  const ca=(wealth||{}).carlitosInvestimentos;
+  const empty=!ppr.length&&!aforro.length&&!depositos.length&&!ci&&!ca&&!(pos||[]).some(p=>p.n>0);
   if(empty) return h('div',{style:{padding:48,textAlign:'center',color:'var(--muted)',fontSize:14}},
     'Importa o wealth.json para ver o teu património.');
 
@@ -2003,15 +2048,12 @@ function PatrimonioPage({wealth,pos,cfg}){
   },0);
 
   /* ── Claudia Investimentos ───────────────────────────────────────────────── */
-  const posMap=buildPosMap(pos);
   const ciItems=(ci?.investimentos||[]);
-  const claudiaCurrentTotal=ciItems.reduce((s,r)=>{
-    const cv=posMap[r.ticker]?.cv;
-    const units=r.precoCompra&&r.valorInvestido?r.valorInvestido/r.precoCompra:null;
-    return s+(units&&cv?units*cv:r.valorInvestido||0);
-  },0);
-  const claudiaInvested=ciItems.reduce((s,r)=>s+(r.valorInvestido||0),0);
-  const claudiaPL=claudiaCurrentTotal-claudiaInvested;
+  const caItems=(ca?.investimentos||[]);
+  // Investments outside the portfolio (Claudia, Carlitos), respecting the owner filter.
+  const invSum=WEALTH_INVESTMENTS.filter(w=>matchOwner(w.owner))
+    .map(w=>investmentsSummary(wealth?.[w.key]?.investimentos,pos,cfg))
+    .reduce((a,b)=>({value:a.value+b.value,cost:a.cost+b.cost,pl:a.pl+b.pl}),{value:0,cost:0,pl:0});
 
   /* ── Portfolio (Carlos) — Stocks vs ETFs, in EUR ────────────────────────── */
   const fxUsd=cfg?.fxEurUsd||1.08;
@@ -2031,8 +2073,8 @@ function PatrimonioPage({wealth,pos,cfg}){
   const portPL=portTotal-portCost;
 
   /* ── Summary totals ──────────────────────────────────────────────────────── */
-  const grandTotal=pprCurrentTotal+aforroTotal+depTotal+depInterest+claudiaCurrentTotal+portTotal;
-  const grandGains=pprGains+allJuros+depInterest+claudiaPL+portPL;
+  const grandTotal=pprCurrentTotal+aforroTotal+depTotal+depInterest+invSum.value+portTotal;
+  const grandGains=pprGains+allJuros+depInterest+invSum.pl+portPL;
 
 
   return h('div',{className:'px-4 py-4 max-w-[1400px] mx-auto'},
@@ -2068,12 +2110,9 @@ function PatrimonioPage({wealth,pos,cfg}){
           (wealth?.aforro||[]).forEach(r=>{vals[r.owner]=(vals[r.owner]||0)+(Number(r.investimento)||0)+(r.juros||0);});
           (wealth?.depositos||[]).forEach(r=>{vals[r.investidor]=(vals[r.investidor]||0)+(r.valor||0);});
           (wealth?.juros||[]).forEach(r=>{vals[r.investidor]=(vals[r.investidor]||0)+(r.valor||0);});
-          const posMap2=buildPosMap(pos);
-          (wealth?.claudiaInvestimentos?.investimentos||[]).forEach(r=>{
-            const cv=posMap2[r.ticker]?.cv;
-            const units=r.precoCompra&&r.valorInvestido?r.valorInvestido/r.precoCompra:null;
-            const val=units&&cv?units*cv:r.valorInvestido||0;
-            vals['Claudia']=(vals['Claudia']||0)+val;
+          WEALTH_INVESTMENTS.forEach(w=>{
+            const val=investmentsSummary(wealth?.[w.key]?.investimentos,pos,cfg).value;
+            if(val)vals[w.owner]=(vals[w.owner]||0)+val;
           });
           const portAll=portLines[0].val+portLines[1].val;
           if(portAll>0)vals['Carlos']=(vals['Carlos']||0)+portAll;
@@ -2130,11 +2169,7 @@ function PatrimonioPage({wealth,pos,cfg}){
       ppr.forEach(r=>add(r.owner,'ppr',(r.valorInvestido||0)+(r.ganhosBrutos||0)));
       aforro.forEach(r=>add(r.owner,'aforro',(Number(r.investimento)||0)+(r.juros||0)));
       juros.forEach(r=>add(r.investidor||r.owner||'Carlos','juros',r.valor||0));
-      ciItems.forEach(r=>{
-        const cv=posMap[r.ticker]?.cv;
-        const units=r.precoCompra&&r.valorInvestido?r.valorInvestido/r.precoCompra:null;
-        add('Claudia','inv',units&&cv?units*cv:r.valorInvestido||0);
-      });
+      WEALTH_INVESTMENTS.forEach(w=>(wealth?.[w.key]?.investimentos||[]).forEach(r=>add(w.owner,'inv',investmentLot(r,pos,cfg).value)));
       const rows=Object.entries(alloc)
         .filter(([o])=>matchOwner(o))
         .map(([o,v])=>({owner:o,vals:v,total:CATS.reduce((s,c)=>s+(v[c.key]||0),0)}))
@@ -2334,36 +2369,47 @@ function PatrimonioPage({wealth,pos,cfg}){
       )
     ),
 
-    /* ── Claudia Investimentos ──────────────────────────────────────────────── */
-    ciItems.length>0&&matchOwner('Claudia')&&h('div',null,
-      h('div',{className:'mt-5'}),
-    h(Shdr,{title:'Claudia Investimentos'}),
-      h('div',{className:'card-table mb-8 overflow-x-auto'},
-        h('table',null,
-          TH('Ticker','Data Compra','Duração','Investido','P.Compra','P.Atual','Unidades','Valor Atual','P&L €','P&L %'),
-          h('tbody',null,ciItems.map((r,i)=>{
-            const cv=posMap[r.ticker]?.cv??null;
-            const units=r.precoCompra&&r.valorInvestido?r.valorInvestido/r.precoCompra:null;
-            const currentVal=units&&cv?units*cv:null;
-            const pl=currentVal!=null?currentVal-r.valorInvestido:null;
-            const plp=pl!=null&&r.valorInvestido?pl/r.valorInvestido:null;
-            const plCol=pl==null?'var(--muted)':pl>=0?'var(--green)':'var(--red)';
-            return h('tr',{key:i},
-              h('td',{className:'font-semibold'},r.ticker),
-              h('td',{className:'text-[11px] text-[var(--muted)]'},r.dataCompra||'—'),
-              h('td',{className:'mono-sm-gold'},durLabel(r.dataCompra)),
-              h('td',{className:'font-mono'},fm(r.valorInvestido)),
-              h('td',{className:'mono-sm-muted'},r.precoCompra!=null?'€'+fn(r.precoCompra):'—'),
-              h('td',{className:'font-mono'},cv!=null?'€'+fn(cv):'—'),
-              h('td',{className:'mono-sm-muted'},units!=null?fn(units,2):'—'),
-              h('td',{className:'font-mono'},currentVal!=null?fm(currentVal):'—'),
-              h('td',{style:{color:plCol}},pl!=null?(pl>=0?'+':'')+fm(pl):'—'),
-              h('td',{style:{color:plCol}},plp!=null?fp(plp):'—')
-            );
-          }))
+    /* ── Claudia / Carlitos Investimentos ─────────────────────────────────── */
+    ...WEALTH_INVESTMENTS.map(w=>{
+      const items=wealth?.[w.key]?.investimentos||[];
+      if(!items.length||!matchOwner(w.owner))return null;
+      const sum=investmentsSummary(items,pos,cfg);
+      const sumCol=sum.pl>=0?'var(--green)':'var(--red)';
+      return h('div',{key:w.key},
+        h('div',{className:'mt-5'}),
+        h(Shdr,{title:w.label}),
+        h('div',{className:'card-table mb-8 overflow-x-auto'},
+          h('table',null,
+            TH('Ticker','Data Compra','Duração','Investido','P.Compra','P.Atual','Unidades','Valor Atual','P&L €','P&L %'),
+            h('tbody',null,items.map((r,i)=>{
+              const lot=investmentLot(r,pos,cfg);
+              const plCol=lot.pl==null?'var(--muted)':lot.pl>=0?'var(--green)':'var(--red)';
+              return h('tr',{key:i},
+                h('td',{className:'font-semibold'},r.ticker),
+                h('td',{className:'text-[11px] text-[var(--muted)]'},r.dataCompra||'—'),
+                h('td',{className:'mono-sm-gold'},durLabel(r.dataCompra)),
+                h('td',{className:'font-mono'},fm(r.valorInvestido)),
+                h('td',{className:'mono-sm-muted'},r.precoCompra!=null?'€'+fn(r.precoCompra):'—'),
+                h('td',{className:'font-mono',title:lot.ref?priceFreshness(lot.ref).title:''},lot.cv!=null?'€'+fn(lot.cv):'—',lot.ref&&h(StaleDot,{p:lot.ref})),
+                h('td',{className:'mono-sm-muted'},lot.units!=null?fn(lot.units,2):'—'),
+                h('td',{className:'font-mono'},lot.currentVal!=null?fm(lot.currentVal):'—'),
+                h('td',{style:{color:plCol}},lot.pl!=null?(lot.pl>=0?'+':'')+fm(lot.pl):'—'),
+                h('td',{style:{color:plCol}},lot.plp!=null?fp(lot.plp):'—')
+              );
+            }),
+            items.length>1&&h('tr',{style:{borderTop:'1px solid var(--border)'}},
+              h('td',{className:'font-semibold',colSpan:3},'Total'),
+              h('td',{className:'font-mono'},fm(sum.cost)),
+              h('td',null),h('td',null),
+              h('td',{className:'mono-sm-muted'},fn(items.reduce((s,r)=>s+(investmentLot(r,pos,cfg).units||0),0),2)),
+              h('td',{className:'font-mono'},fm(sum.value)),
+              h('td',{style:{color:sumCol}},(sum.pl>=0?'+':'')+fm(sum.pl)),
+              h('td',{style:{color:sumCol}},sum.cost?fp(sum.pl/sum.cost):'—')
+            ))
+          )
         )
-      )
-    ),
+      );
+    }),
 
     /* ── Carlos Investimentos ─────────────────────────────────────────── */
     showPort&&portTotal>0&&h('div',{className:'mt-5 mb-8'},
@@ -4373,7 +4419,7 @@ function App(){
     // ── Sheet 11: Wealth — Claudia Investimentos ──────────────────────────
     const ciHeaders=row('Ticker','Valor Investido','Preço Compra','Data Compra','Curr Price','Valor Actual','P&L','P&L%');
     const ciRows=((wData.claudiaInvestimentos||{}).investimentos||[]).map(r=>{
-      const currPrice=(pos||[]).find(p=>p.t===r.ticker)?.cv;
+      const currPrice=referencePrice(r.ticker,pos,cfg)?.cv;
       const units=r.precoCompra&&r.valorInvestido?r.valorInvestido/r.precoCompra:null;
       const valorActual=units&&currPrice?units*currPrice:null;
       const pl=valorActual!=null?valorActual-r.valorInvestido:null;
@@ -4413,16 +4459,14 @@ function App(){
       (wData.juros||[]).filter(r=>r.investidor===owner).forEach(r=>{
         nwRows.push(row(owner,'Juros',r.plataforma,r.valor??'',r.valor??'','0','0.00'));
       });
-      // Claudia Investimentos
-      if(owner==='Claudia'){
-        ((wData.claudiaInvestimentos||{}).investimentos||[]).forEach(r=>{
-          const currPrice=(pos||[]).find(p=>p.t===r.ticker)?.cv;
-          const units=r.precoCompra&&r.valorInvestido?r.valorInvestido/r.precoCompra:null;
-          const va=units&&currPrice?units*currPrice:r.valorInvestido;
-          const pl=va-r.valorInvestido;
+      // Claudia / Carlitos Investimentos
+      WEALTH_INVESTMENTS.filter(w=>w.owner===owner).forEach(w=>{
+        ((wData[w.key]||{}).investimentos||[]).forEach(r=>{
+          const va=investmentLot(r,pos,cfg).value;
+          const pl=va-(r.valorInvestido||0);
           nwRows.push(row(owner,'Investimentos',r.ticker,r.valorInvestido??'',va.toFixed(2),pl.toFixed(2),r.valorInvestido?pct(pl/r.valorInvestido):''));
         });
-      }
+      });
     });
 
     // ── Combine all sheets ─────────────────────────────────────────────────
@@ -4509,7 +4553,7 @@ function App(){
       tab==='dashboard'&&h(Dash,{pos:safePos,qual:safeQual,income:safeInc,sold:safeSold,cfg,setCfg,wealth}),
       tab==='portfolio'&&h(Port,{pos:safePos,setPos,income:safeInc,qual:safeQual,setQual,cfg,sold:safeSold,setSold}),
       tab==='transactions'&&h(TransactionsPage,{cfg,pos:safePos,setPos,sold:safeSold,setSold,income:safeInc,qual:safeQual,setQual}),
-      tab==='config'&&h(Conf,{cfg,setCfg,pos:safePos,setPos,sold:safeSold,setSold,income:safeInc,qual:safeQual,setQual,onReset:handleReset,exportCSV,importData,exportData,importBrokerQuotes,exportBrokerQuoteTemplate}),
+      tab==='config'&&h(Conf,{wealth,cfg,setCfg,pos:safePos,setPos,sold:safeSold,setSold,income:safeInc,qual:safeQual,setQual,onReset:handleReset,exportCSV,importData,exportData,importBrokerQuotes,exportBrokerQuoteTemplate}),
       tab==='dividendos'&&h(DividendosPage,{pos:safePos,income:safeInc,qual:safeQual,sold:safeSold,cfg}),
       tab==='analytics'&&h(AnalyticsPage,{pos:safePos,qual:safeQual,income:safeInc,sold:safeSold,cfg,wealth}),
       tab==='teses'&&h(TesesPage,{pos:safePos,teses,qual:safeQual}),
@@ -4887,9 +4931,8 @@ function Dash({pos,qual,income,sold,cfg,setCfg,wealth}){
       /* Claudia Folio */
       (()=>{
         const ci=(wealth?.claudiaInvestimentos?.investimentos)||[];
-        const posMap2=Object.fromEntries((pos||[]).map(p=>[p.t,p]));
         const clVal=ci.reduce((s,r)=>{
-          const cv=posMap2[r.ticker]?.cv;
+          const cv=referencePrice(r.ticker,pos,cfg)?.cv;
           const units=r.precoCompra&&r.valorInvestido?r.valorInvestido/r.precoCompra:0;
           return s+(cv&&units?units*cv:r.valorInvestido||0);
         },0);
@@ -5062,9 +5105,8 @@ h('div',{className:'card-sm'},
           const claudiaTotal=(()=>{
             const items=wealth?.claudiaInvestimentos?.investimentos||[];
             if(!items.length)return 0;
-            const pm=buildPosMap(pos);
             return items.reduce((s,r)=>{
-              const cv=pm[r.ticker]?.cv;
+              const cv=referencePrice(r.ticker,pos,cfg)?.cv;
               const units=r.precoCompra&&r.valorInvestido?r.valorInvestido/r.precoCompra:null;
               return s+(units&&cv?units*cv:r.valorInvestido||0);
             },0);
@@ -5072,7 +5114,8 @@ h('div',{className:'card-sm'},
           // Portfolio: total market value (EUR)
           const portTotal=m.tv||0;
           const jurosCapital=(wealth?.juros||[]).reduce((s,r)=>s+(r.valor||0),0);
-          const grandTotal=portTotal+pprTotal+aferroTotal+depositosTotal+claudiaTotal+jurosCapital;
+          const carlitosTotal=investmentsSummary(wealth?.carlitosInvestimentos?.investimentos,pos,cfg).value;
+          const grandTotal=portTotal+pprTotal+aferroTotal+depositosTotal+claudiaTotal+carlitosTotal+jurosCapital;
           if(!grandTotal)return null;
           const nwc=wealth?.netWorthColors||{};
           const items=[
@@ -5081,6 +5124,7 @@ h('div',{className:'card-sm'},
             {label:'Certificados de Aforro',val:aferroTotal,col:nwc.aforro||'var(--blue)'},
             {label:'Depósitos a Prazo',val:depositosTotal,col:nwc.depositos||'#a78bfa'},
             {label:'Claudia Investimentos',val:claudiaTotal,col:nwc.claudiaInvestimentos||'#f472b6'},
+            {label:'Carlitos Investimentos',val:carlitosTotal,col:nwc.carlitosInvestimentos||'#fbbf24'},
             {label:'Juros / Cash',val:jurosCapital,col:'var(--green)'},
           ].filter(x=>x.val>0).sort((a,b)=>b.val-a.val);
           return h('div',{className:'card'},
@@ -5578,15 +5622,6 @@ function Port({pos,setPos,income,qual,setQual,cfg,sold,setSold}){
           );
         })()
       ),
-      (()=>{
-        const stale=(pos||[]).filter(p=>(p.n==null||p.n>0)&&!priceFreshness(p).live);
-        if(!stale.length)return null;
-        return h('div',{style:{fontSize:11,color:'var(--muted)',marginBottom:10,lineHeight:1.5}},
-          h('span',{style:{color:'var(--gold)'}},'● '),
-          `${stale.length} de ${(pos||[]).filter(p=>p.n==null||p.n>0).length} preços não são live (introduzidos à mão, CSV ou com mais de ${LIVE_PRICE_MAX_DAYS} dias): `,
-          h('span',{style:{color:'var(--text)'}},stale.map(p=>p.t).join(', ')),
-          '. Actualiza em Config → Cotações online.');
-      })(),
       h('div',{className:'flex gap-2 mb-3.5 flex-wrap items-center'},
         ['TODAS','USD','EUR','ETF'].map(f=>h('button',{key:f,className:'fb'+(flt===f?' on':''),onClick:()=>setFlt(f)},f==='TODAS'?'Todas':f)),
       ),
@@ -5706,7 +5741,7 @@ function BrokerSelect({value,list,onChange,style}){
 }
 // ── Cotações online: test every ticker against a provider (plus an optional fallback
 // for the tickers it can't price), then apply the ones you confirm ──
-function PricePanel({cfg,setCfg,pos,setPos}){
+function PricePanel({cfg,setCfg,pos,setPos,wealth}){
   const[provider,setProvider]=useState(cfg?.priceProvider&&PRICE_PROVIDERS[cfg.priceProvider]?cfg.priceProvider:'twelvedata');
   const[fallback,setFallback]=useState(cfg?.priceFallback===''?'':(cfg?.priceFallback&&PRICE_PROVIDERS[cfg.priceFallback]?cfg.priceFallback:'alphavantage'));
   const[keys,setKeys]=useState(()=>Object.fromEntries(Object.keys(PRICE_PROVIDERS).map(id=>[id,readPriceKey(id)])));
@@ -5724,7 +5759,10 @@ function PricePanel({cfg,setCfg,pos,setPos}){
     return()=>window.removeEventListener('price-keys-changed',refresh);
   },[]);
   const fb=fallback&&fallback!==provider?fallback:'';
-  const active=(pos||[]).filter(p=>(p.n==null||p.n>0)&&p.t);
+  // Active positions plus reference tickers (e.g. VWCE.DE in Claudia Investimentos),
+  // whose price is stored in cfg.refPrices instead of a position. They are in EUR.
+  const active=[...(pos||[]).filter(p=>(p.n==null||p.n>0)&&p.t),
+    ...referenceTickers(wealth,pos,cfg).map(t=>({t,cat:'EUR',cv:cfg?.refPrices?.[t]?.cv||null,ref:true}))];
   const symbolFor=p=>(cfg?.priceSymbols&&cfg.priceSymbols[p.t])||defaultPriceSymbol(p);
   const setKey=(id,value)=>{const v=value.trim();setKeys(k=>({...k,[id]:v}));writePriceKey(id,v);};
   const changeProvider=id=>{setProvider(id);setRows([]);setMessage('');setCfg({...cfg,priceProvider:id});};
@@ -5738,7 +5776,7 @@ function PricePanel({cfg,setCfg,pos,setPos}){
   const run=async()=>{
     if(!keys[provider]){setMessage('Falta a chave da API de '+PRICE_PROVIDERS[provider].name+'.');return;}
     cancel.current=false;setRunning(true);setMessage('A obter taxas de câmbio do BCE…');
-    const next=active.map(p=>({t:p.t,symbol:symbolFor(p),target:positionCurrency(p),current:p.cv,status:'pending'}));
+    const next=active.map(p=>({t:p.t,ref:!!p.ref,symbol:symbolFor(p),target:positionCurrency(p),current:p.cv,status:'pending'}));
     setRows([...next]);
     let rates=null;
     try{rates=(await fetchEcbRates()).rates;}
@@ -5789,16 +5827,18 @@ function PricePanel({cfg,setCfg,pos,setPos}){
   };
   const toApply=rows.filter(r=>r.status==='ok'&&r.apply);
   const apply=()=>{
-    const byTicker=new Map(toApply.map(r=>[r.t,r]));
+    const byTicker=new Map(toApply.filter(r=>!r.ref).map(r=>[r.t,r]));
     const today=new Date().toISOString().slice(0,10);
     setPos(prev=>prev.map(p=>{
       const r=byTicker.get(p.t);
       return r?{...p,cv:Math.round(r.price*10000)/10000,cvAsOf:r.date||today,cvSource:PRICE_PROVIDERS[r.via].name}:p;
     }));
+    const refPrices={...(cfg?.refPrices||{})};
+    toApply.filter(r=>r.ref).forEach(r=>{refPrices[r.t]={cv:Math.round(r.price*10000)/10000,asOf:r.date||today,source:PRICE_PROVIDERS[r.via].name};});
     const sources=[...new Set(toApply.map(r=>PRICE_PROVIDERS[r.via].name))].join(' + ');
-    setCfg({...cfg,priceProvider:provider,priceFallback:fallback,quotesImportedAt:new Date().toISOString(),quotesSource:sources});
+    setCfg({...cfg,refPrices,priceProvider:provider,priceFallback:fallback,quotesImportedAt:new Date().toISOString(),quotesSource:sources});
     setMessage(`${toApply.length} cotações aplicadas.`);
-    setRows(rows.map(r=>byTicker.has(r.t)?{...r,status:'applied',apply:false}:r));
+    setRows(rows.map(r=>r.status==='ok'&&r.apply?{...r,status:'applied',apply:false}:r));
   };
   const fmt=(v,d=2)=>Number.isFinite(v)?v.toFixed(d):'—';
   const cell={padding:'4px 6px',fontSize:10,borderBottom:'1px solid var(--border)',whiteSpace:'nowrap'};
@@ -5838,7 +5878,7 @@ function PricePanel({cfg,setCfg,pos,setPos}){
           return h('tr',{key:r.t},
             h('td',{style:cell},h('input',{type:'checkbox',checked:!!r.apply,disabled:r.status!=='ok'||running,
               onChange:e=>setRows(rows.map((x,j)=>j===i?{...x,apply:e.target.checked}:x))})),
-            h('td',{style:{...cell,fontWeight:700}},r.t),
+            h('td',{style:{...cell,fontWeight:700},title:r.ref?'Fora da carteira (ex.: Claudia Investimentos): o preço é guardado em refPrices':''},r.t,r.ref&&h('span',{style:{fontWeight:400,color:'var(--muted)',marginLeft:4}},'(ref.)')),
             h('td',{style:cell},h('input',{className:'ed',style:{width:84,fontSize:10},defaultValue:r.symbol,disabled:running,key:r.t+r.symbol,
               title:'Formato: TICKER ou TICKER.BOLSA ('+Object.keys(PRICE_EXCHANGES).filter(k=>k!=='US').join(', ')+')',
               onBlur:e=>{if(p&&e.target.value.trim().toUpperCase()!==r.symbol){changeSymbol(p,e.target.value);setRows(rows.map((x,j)=>j===i?{...x,symbol:e.target.value.trim().toUpperCase()||defaultPriceSymbol(p),status:'pending',apply:false}:x));}}})),
@@ -5858,7 +5898,7 @@ function PricePanel({cfg,setCfg,pos,setPos}){
   );
 }
 
-function Conf({cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onReset,exportCSV,importData,exportData,importBrokerQuotes,exportBrokerQuoteTemplate}){
+function Conf({wealth,cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onReset,exportCSV,importData,exportData,importBrokerQuotes,exportBrokerQuoteTemplate}){
   const[confTab,setConfTab]=useState('config');
   const[fxStatus,setFxStatus]=useState(null);
   const updateFxFromEcb=async()=>{
@@ -5903,7 +5943,7 @@ function Conf({cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onReset,ex
         )
       ),
 
-      h(PricePanel,{cfg,setCfg,pos,setPos}),
+      h(PricePanel,{cfg,setCfg,pos,setPos,wealth}),
 
       h('div',{className:'input-row'},
         MicroLabel('Cotações locais — CSV do broker',{size:9,mb:8}),
@@ -6749,13 +6789,25 @@ function HoldingsEdit({pos,setPos,cfg,qual}){
 }
 
 // ── Shared BarChart (used in Income + DividendosPage) ───────────────────────
-const BarChart=memo(function BarChart({tots,color,label,sm,estTotal}){
+const BarChart=memo(function BarChart({tots,color,label,sm,estTotal,growth}){
   const CHART_YEARS=YEARS.filter(y=>y>=2023);
   const est=estTotal||0;
-  const maxV=Math.max(...CHART_YEARS.map(y=>tots[y]||0),est,1);
+  // Next-year projection: this year's full estimate grown by cfg.divGrowth
+  // (same formula as "Est. next year" in the income table).
+  const nextEst=est>0&&growth>0?est*growth:0;
+  const maxV=Math.max(...CHART_YEARS.map(y=>tots[y]||0),est,nextEst,1);
+  const hatch=c=>'repeating-linear-gradient(45deg,'+c+' 0,'+c+' 3px,transparent 3px,transparent 6px)';
   return h('div',{className:'flex-1'},
     h('div',{style:{fontSize:10,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--muted)',marginBottom:10}},label),
     h('div',{style:{display:'flex',gap:6,alignItems:'flex-end',height:176}},
+      nextEst>0&&h('div',{key:'next',title:'Previsão: estimativa de '+CUR_YEAR+' × (1 + crescimento do dividendo de '+((growth-1)*100).toFixed(1)+'%, em Config)',
+        style:{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:5}},
+        h('div',{style:{fontSize:9,fontWeight:700,color:'var(--green)'}},'+'+((growth-1)*100).toFixed(0)+'%'),
+        h('div',{style:{fontSize:9,color:'var(--muted)'}},'est. '+sm+fn(nextEst,0)),
+        h('div',{style:{width:'100%',height:Math.max(nextEst/maxV*100*0.92,2)+'px',borderRadius:'3px 3px 0 0',
+          background:hatch(color),border:'1px dashed '+color,opacity:.6}}),
+        h('div',{style:{fontSize:9,color:'var(--muted)'}},(CUR_YEAR+1)+' (prev.)')
+      ),
       CHART_YEARS.map((y,i)=>{
         const val=tots[y]||0;
         const prev=i<CHART_YEARS.length-1?tots[CHART_YEARS[i+1]]||0:null;
@@ -6776,7 +6828,7 @@ const BarChart=memo(function BarChart({tots,color,label,sm,estTotal}){
             :(val>0&&h('div',{style:{fontSize:9,color:isLast?'var(--gold)':'var(--muted)'}},sm+fn(val,0))),
           h('div',{style:{width:'100%',display:'flex',flexDirection:'column',borderRadius:'3px 3px 0 0',overflow:'hidden'}},
             isLast&&remaining>0&&h('div',{style:{width:'100%',height:Math.max(remPct*0.92,2)+'px',
-              background:'repeating-linear-gradient(45deg,'+(isLast?'var(--gold)':color)+' 0,'+(isLast?'var(--gold)':color)+' 3px,transparent 3px,transparent 6px)',
+              background:hatch(isLast?'var(--gold)':color),
               opacity:.35}}),
             h('div',{style:{width:'100%',height:Math.max(pct*0.92,val>0?2:0)+'px',background:isLast?'var(--gold)':color,opacity:.85}})
           ),
@@ -7104,7 +7156,7 @@ function Income({pos,setPos,income,qual,setQual,sold,cfg,initialTab}){
         h('a',{href:'https://alreits.com/dashboard',target:'_blank',rel:'noopener noreferrer',style:{color:'var(--blue)',textDecoration:'underline'}},'Alreits'),
         ' para consultar o payout ratio.'
       ),
-      h('div',{className:'card-table overflow-x-auto'},
+      h('div',{className:'card-table sticky-head'},
         h('table',null,
           h('thead',null,h('tr',null,
             ['Ticker','Score','DivGr 1A','DivGr 3A','DivGr 5A','DivGr 10A','Payout %','Yield %','Buyback %','EPS Gr%','Debt x','ROIC %','FCF %','Rev Gr%','Op Mar%'].map(x=>h('th',{key:x},x))
@@ -7472,13 +7524,22 @@ function AnalyticsPage({pos,qual,income,sold,cfg,wealth}){
         (()=>{
           const etfTer=cfg?.etfTer||{};
           const etfPos=pos.filter(p=>p.cat==='ETF'&&p.n>0&&p.cv>0);
-          const rows=etfPos.map(p=>{
-            const val=p.n*p.cv;
-            const ter=etfTer[p.t]||0;
+          const mkRow=(t,val,note)=>{
+            const ter=etfTer[t]||0;
             const costAnnual=val*ter;
-            const costMonthly=costAnnual/12;
-            return{t:p.t,val,ter,costAnnual,costMonthly};
-          }).sort((a,b)=>b.costAnnual-a.costAnnual);
+            return{key:t+(note||''),t,note,val,ter,costAnnual,costMonthly:costAnnual/12};
+          };
+          // ETFs held outside the portfolio (Claudia + Carlitos Investimentos), one line per ticker.
+          const outside={};
+          WEALTH_INVESTMENTS.forEach(w=>(wealth?.[w.key]?.investimentos||[]).forEach(r=>{
+            if(!r?.ticker)return;
+            const o=outside[r.ticker]=outside[r.ticker]||{val:0,owners:new Set()};
+            o.val+=investmentLot(r,pos,cfg).value;o.owners.add(w.owner);
+          }));
+          const rows=[
+            ...etfPos.map(p=>mkRow(p.t,p.n*p.cv)),
+            ...Object.entries(outside).filter(([,o])=>o.val>0).map(([t,o])=>mkRow(t,o.val,[...o.owners].join(' + '))),
+          ].sort((a,b)=>b.costAnnual-a.costAnnual);
           const totalVal=rows.reduce((s,r)=>s+r.val,0);
           const totalCost=rows.reduce((s,r)=>s+r.costAnnual,0);
           const avgTer=totalVal>0?totalCost/totalVal:0;
@@ -7495,8 +7556,10 @@ function AnalyticsPage({pos,qual,income,sold,cfg,wealth}){
                   h('th',{style:{width:140}},'Peso no custo total'),
                 )),
                 h('tbody',null,
-                  ...rows.map(r=>h('tr',{key:r.t,style:{borderBottom:'1px solid var(--s2)'}},
-                    h('td',{style:{padding:'8px 12px',fontWeight:600}},r.t),
+                  ...rows.map(r=>h('tr',{key:r.key,style:{borderBottom:'1px solid var(--s2)'}},
+                    h('td',{style:{padding:'8px 12px',fontWeight:600}},r.t,
+                      r.note&&h('div',{style:{fontSize:9,fontWeight:400,color:'var(--muted)'}},r.note),
+                      r.ter===0&&h('div',{style:{fontSize:9,fontWeight:400,color:'var(--gold)'}},'TER em falta (Config)')),
                     h('td',{style:{padding:'8px 10px',textAlign:'right',color:'var(--muted)'}}, '€'+fn(r.val)),
                     h('td',{style:{padding:'8px 10px',textAlign:'right',color:'var(--muted)'}},(r.ter*100).toFixed(2)+'%'),
                     h('td',{style:{padding:'8px 10px',textAlign:'right',color:'var(--red)',fontWeight:600}},r.costAnnual>0?'-€'+fn(r.costAnnual):'—'),
@@ -8420,8 +8483,8 @@ function DividendosPage({pos,income,qual,sold,cfg}){
       const estEUR=(pos||[]).filter(p=>p.cat!=='USD'&&p.n>0&&p.cv>0).reduce((s,p)=>{const dy=getQual(qualMap,p.t)?.dy||0;return s+(dy>0?dy*p.n*p.cv:0);},0);
       return h('div',{className:'mb-4'},
         h('div',{className:'grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3'},
-          h('div',{className:'card-sm px-5'},h(BarChart,{tots:tUf,color:'var(--blue)',label:'USD — Evolução Anual (incl. posições fechadas) · Total recebido $'+fn(tUf.total,0),sm:'$',estTotal:estUSD})),
-          h('div',{className:'card-sm px-5'},h(BarChart,{tots:tEf,color:'var(--green)',label:'EUR — Evolução Anual (incl. posições fechadas) · Total recebido €'+fn(tEf.total,0),sm:'€',estTotal:estEUR}))
+          h('div',{className:'card-sm px-5'},h(BarChart,{tots:tUf,color:'var(--blue)',label:'USD — Evolução Anual (incl. posições fechadas) · Total recebido $'+fn(tUf.total,0),sm:'$',estTotal:estUSD,growth:1+(cfg?.divGrowth??0.03)})),
+          h('div',{className:'card-sm px-5'},h(BarChart,{tots:tEf,color:'var(--green)',label:'EUR — Evolução Anual (incl. posições fechadas) · Total recebido €'+fn(tEf.total,0),sm:'€',estTotal:estEUR,growth:1+(cfg?.divGrowth??0.03)}))
         ),
       );
     })(),
