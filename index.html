@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.9';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.10';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -102,6 +102,10 @@ a{color:var(--blue);text-decoration:none;}
 .toast{position:fixed;bottom:24px;right:24px;background:#238636;color:#fff;padding:8px 16px;border-radius:6px;font-size:12px;font-weight:600;z-index:9999;pointer-events:none;}
 
 /* ── Top navigation bar ── */
+/* Donut chart + legend: legend columns spread evenly over the free width */
+.donut-wrap{display:grid;grid-template-columns:240px minmax(0,1fr);gap:16px;align-items:center;}
+.donut-legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:6px 12px;width:100%;}
+@media(max-width:640px){.donut-wrap{grid-template-columns:1fr;justify-items:center;}}
 /* Table whose header stays visible while its rows scroll (Quality Score) */
 .sticky-head{max-height:calc(100vh - 120px);overflow:auto !important;}
 .sticky-head thead th{position:sticky;top:0;z-index:2;background:var(--surface);box-shadow:inset 0 -1px 0 var(--border);}
@@ -7387,7 +7391,7 @@ function DividendosEstPorPosicaoPie({pos,qualMap,cfg,standalone=false}){
   const slices=computeDonutSlices(items.map((x,i)=>({...x,val:x.v,col:COLS[i%COLS.length]})),CX,CY,R,ri);
   return h('div',{className:standalone?'card':'mt-5 pt-5',style:standalone?null:{borderTop:'1px solid var(--border)'}},
     h(Shdr,{title:'Dividendos Estimados por Posição',hint:items.length+' posições · anual, yield actual × posição'}),
-    h('div',{style:{display:'flex',gap:16,alignItems:'center',flexWrap:'wrap'}},
+    h('div',{className:'donut-wrap'},
       h('svg',{width:240,height:240,className:'shrink-0'},
         slices.map(sl=>h('path',{key:sl.t,d:sl.d,fill:sl.col,
           opacity:hov&&hov!==sl.t?.25:1,className:'cursor-pointer transition-opacity duration-150',
@@ -7396,7 +7400,7 @@ function DividendosEstPorPosicaoPie({pos,qualMap,cfg,standalone=false}){
         h('text',{x:CX,y:CY+12,textAnchor:'middle',fontSize:hov?16:11,fontWeight:700,fill:'var(--green)'},
           hov?(slices.find(s=>s.t===hov)?.pct*100||0).toFixed(1)+'%':'estimado')
       ),
-      h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'4px 16px'}},
+      h('div',{className:'donut-legend'},
         slices.map(sl=>h('div',{key:sl.t,style:{display:'flex',alignItems:'center',gap:5,cursor:'pointer',opacity:hov&&hov!==sl.t?.3:1},
           onMouseEnter:()=>setHov(sl.t),onMouseLeave:()=>setHov(null)},
           h('div',{style:{width:8,height:8,borderRadius:6,background:sl.col,flexShrink:0}}),
@@ -8504,7 +8508,7 @@ function DividendosPage({pos,income,qual,sold,cfg}){
             items.map((x,i)=>({...x,val:x.yld,col:CHART_PALETTE[i%CHART_PALETTE.length]})),
             CX,CY,R,ri
           );
-          return h('div',{style:{display:'grid',gridTemplateColumns:'240px 1fr',gap:16,alignItems:'center'}},
+          return h('div',{className:'donut-wrap'},
             h('svg',{width:240,height:240,viewBox:'0 0 240 240'},
               slices.map(sl=>{
                 const isH=hov===sl.t;
@@ -8523,7 +8527,7 @@ function DividendosPage({pos,income,qual,sold,cfg}){
                 hov?(items.find(x=>x.t===hov)?.yld*100||0).toFixed(1)+'%':'por Ticker'
               )
             ),
-            h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'4px 16px'}},
+            h('div',{className:'donut-legend'},
               slices.map(sl=>h('div',{key:sl.t,
                 style:{display:'flex',alignItems:'center',gap:5,cursor:'pointer',opacity:hov&&hov!==sl.t?.4:1},
                 onMouseEnter:()=>setHov(sl.t),onMouseLeave:()=>setHov(null),
