@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.29';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.30';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1423,9 +1423,18 @@ function yieldMetricColor(value){
   if(value<0.035)return{bg:'#3d3108',color:'var(--tier-ok)'};
   return{bg:'#052e16',color:'var(--green)'};
 }
+const STORAGE_READ_ERRORS=[];
 async function dbg(k){
   const v=localStorage.getItem('if_'+k);
-  return v===null?null:JSON.parse(v);
+  if(v===null)return null;
+  try{return JSON.parse(v);}
+  catch(error){
+    // Keep the unreadable value aside (autosave would overwrite it) and carry on without it.
+    console.error('stored data unreadable',k,error);
+    try{localStorage.setItem('if_corrupt_'+k,v);}catch(backupError){console.error('backup of unreadable data failed',backupError);}
+    STORAGE_READ_ERRORS.push(k);
+    return null;
+  }
 }
 async function dbs(k,v){
   try{
@@ -4093,6 +4102,45 @@ function StockModal({ticker,pos,sold,income,qual,cfg,onClose}){
 }
 function pct2(v){return v!=null?(v*100).toFixed(2)+'%':'—';}
 
+// Error boundaries: a render error in one page (or the stock modal) shows a
+// recoverable message instead of unmounting the whole app. The data in
+// localStorage is untouched, so the user can still export it.
+// Makes a non-button element (sortable <th>, clickable row) usable from the keyboard.
+function pressable(onPress,extra){
+  return{...extra,onClick:onPress,role:'button',tabIndex:0,
+    onKeyDown:e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onPress(e);}}};
+}
+function errorText(error){return String(error&&error.message||error||'Erro desconhecido');}
+class PageErrorBoundary extends React.Component{
+  constructor(props){super(props);this.state={error:null};}
+  static getDerivedStateFromError(error){return{error};}
+  componentDidCatch(error,info){console.error('page render failed',error,info&&info.componentStack);}
+  render(){
+    if(!this.state.error)return this.props.children;
+    const{onExport,onDismiss}=this.props;
+    return h('div',{className:'card',role:'alert',style:{borderColor:'var(--red)'}},
+      h('div',{style:{fontWeight:600,marginBottom:6}},'Esta secção encontrou um erro e não pôde ser mostrada.'),
+      h('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:10,wordBreak:'break-word'}},errorText(this.state.error)),
+      h('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:10}},'Os teus dados continuam guardados no browser. Podes tentar de novo, mudar de separador ou exportar os dados.'),
+      h('div',{className:'flex gap-2 flex-wrap'},
+        h('button',{className:'btn-primary',onClick:()=>this.setState({error:null})},'Tentar de novo'),
+        onExport&&h('button',{className:'btn-secondary',onClick:onExport},'Exportar dados'),
+        onDismiss&&h('button',{className:'btn-secondary',onClick:onDismiss},'Fechar')));
+  }
+}
+class AppErrorBoundary extends React.Component{
+  constructor(props){super(props);this.state={error:null};}
+  static getDerivedStateFromError(error){return{error};}
+  componentDidCatch(error,info){console.error('app render failed',error,info&&info.componentStack);}
+  render(){
+    if(!this.state.error)return this.props.children;
+    return h('div',{role:'alert',style:{padding:24,maxWidth:560,margin:'40px auto',color:'var(--text)'}},
+      h('div',{style:{fontWeight:600,fontSize:16,marginBottom:8}},'A aplicação encontrou um erro.'),
+      h('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:12,wordBreak:'break-word'}},errorText(this.state.error)),
+      h('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:12}},'Os teus dados continuam guardados no browser. Recarrega a página; se o erro continuar, exporta os dados em Config logo que a aplicação abrir.'),
+      h('button',{className:'btn-primary',onClick:()=>location.reload()},'Recarregar'));
+  }
+}
 function App(){
   const[tab,setTab]=useState('dashboard');
   const[selectedTicker,setSelectedTicker]=useState(null);
@@ -4107,6 +4155,14 @@ function App(){
 
   const[dirty,setDirty]=useState(false);
   const[toast,setToast]=useState('');
+  const toastTimer=useRef(null);
+  // ms=0 keeps the message until the next one.
+  const notify=useCallback((message,ms=6000)=>{
+    clearTimeout(toastTimer.current);
+    setToast(message);
+    toastTimer.current=message&&ms?setTimeout(()=>setToast(''),ms):null;
+  },[]);
+  useEffect(()=>()=>clearTimeout(toastTimer.current),[]);
   const[rdy,setRdy]=useState(false);
   const[noData,setNoData]=useState(false);
   const _loaded=useRef(false);
@@ -4182,10 +4238,11 @@ function App(){
           setCfg(DCFG);
           setNoData(true);
         }
+        if(STORAGE_READ_ERRORS.length)notify('Alguns dados guardados estavam ilegíveis ('+STORAGE_READ_ERRORS.join(', ')+') e não foram carregados. Foi guardada uma cópia; importa o teu income-factory.json mais recente.',0);
       }catch(err){
         setCfg(DCFG);
         setNoData(true);
-        setToast('Não foi possível carregar os dados guardados. Verifica o armazenamento antes de importar dados novos.');
+        notify('Não foi possível carregar os dados guardados. Verifica o armazenamento antes de importar dados novos.',0);
       }finally{
         _loaded.current=true;
         setRdy(true);
@@ -4230,10 +4287,9 @@ function App(){
   useEffect(()=>{
     const handler=e=>{
       const quotaExceeded=!!(e.detail&&e.detail.quotaExceeded);
-      setToast(quotaExceeded
+      notify(quotaExceeded
         ?'Espaço do browser esgotado — exporta o income-factory.json em Config para não perder dados!'
         :'Não foi possível guardar os dados no navegador. Exporta o income-factory.json em Config e verifica o espaço disponível.');
-      setTimeout(()=>setToast(''),7000);
     };
     window.addEventListener('storage-write-failed',handler);
     return ()=>window.removeEventListener('storage-write-failed',handler);
@@ -4247,15 +4303,13 @@ function App(){
     }catch(e){
       _autoSaveSuspended.current=false;
       console.error('reset storage failed',e);
-      setToast('Não foi possível concluir a eliminação dos dados. Recarrega a aplicação antes de continuar.');
-      setTimeout(()=>setToast(''),5000);
+      notify('Não foi possível concluir a eliminação dos dados. Recarrega a aplicação antes de continuar.');
       return;
     }
     // Reset all state — show the noData welcome screen
     setPos(null);setQual(null);setCfg(DCFG);setSold([]);setWealth(null);setTeses(null);
     setDirty(false);setTab('dashboard');setNoData(true);
-    setToast('Dados apagados — importa o teu income-factory.json para continuar');
-    setTimeout(()=>setToast(''),4000);
+    notify('Dados apagados — importa o teu income-factory.json para continuar');
   },[]);
 
   const save=useCallback(async()=>{
@@ -4272,13 +4326,11 @@ function App(){
       writeStorageBatch(entries);
       _autoSaveSuspended.current=false;
       setDirty(false);
-      setToast('Guardado — exporta o income-factory.json em Config para ter uma cópia fora do browser');
-      setTimeout(()=>setToast(''),4000);
+      notify('Guardado — exporta o income-factory.json em Config para ter uma cópia fora do browser');
     }catch(e){
       _autoSaveSuspended.current=false;
       console.error('manual save failed',e);
-      setToast('Não foi possível guardar todos os dados. Exporta o income-factory.json em Config para criar uma cópia de segurança.');
-      setTimeout(()=>setToast(''),7000);
+      notify('Não foi possível guardar todos os dados. Exporta o income-factory.json em Config para criar uma cópia de segurança.');
     }
   },[pos,qual,cfg,sold,wealth,teses]);
 
@@ -4288,7 +4340,7 @@ function App(){
     return validateValuationHistory(raw===null?[]:JSON.parse(raw));
   };
   const exportData=useCallback(()=>{
-    const done=message=>{setToast(message);setTimeout(()=>setToast(''),5000);};
+    const done=message=>notify(message);
     try{
       const filename='income-factory_'+new Date().toISOString().slice(0,10)+'.json';
       const priceKeys=cfg?.exportPriceKeys?Object.fromEntries(Object.keys(PRICE_PROVIDERS).map(id=>[id,readPriceKey(id)])):null;
@@ -4339,12 +4391,11 @@ function App(){
         if(d.theses!==undefined)setTeses(d.theses);
         setNoData(false);
         const nActive=(positions||pos||[]).length,nSold=(d.sold||sold||[]).length;
-        setToast((full?'Dados importados':'Ficheiros antigos importados')+` — ${nActive} activas · ${nSold} fechadas.`+(restoredKeys.length?` ${restoredKeys.length} chave${restoredKeys.length===1?'':'s'} API restaurada${restoredKeys.length===1?'':'s'}.`:'')+(full?'':' Exporta agora para criar o teu income-factory.json.'));
+        notify((full?'Dados importados':'Ficheiros antigos importados')+` — ${nActive} activas · ${nSold} fechadas.`+(restoredKeys.length?` ${restoredKeys.length} chave${restoredKeys.length===1?'':'s'} API restaurada${restoredKeys.length===1?'':'s'}.`:'')+(full?'':' Exporta agora para criar o teu income-factory.json.'));
       }catch(error){
         console.error('data import failed',error);
-        setToast('Dados não importados: '+error.message);
+        notify('Dados não importados: '+error.message);
       }
-      setTimeout(()=>setToast(''),6000);
     });
   },[pos,sold]);
   const importBrokerQuotes=useCallback(()=>{
@@ -4371,12 +4422,11 @@ function App(){
         dates.sort();
         const latest=dates[dates.length-1];
         const ageDays=latest?Math.floor((Date.now()-new Date(latest+'T00:00:00').getTime())/86400000):0;
-        setToast(`${result.quotes.length} cotações actualizadas${result.fxRate!==null?' e EUR/USD actualizado':''}${result.ignored?`; ${result.ignored} linhas sem posição ignoradas`:''}${ageDays>5?`; atenção: dados com ${ageDays} dias`:''}.`);
+        notify(`${result.quotes.length} cotações actualizadas${result.fxRate!==null?' e EUR/USD actualizado':''}${result.ignored?`; ${result.ignored} linhas sem posição ignoradas`:''}${ageDays>5?`; atenção: dados com ${ageDays} dias`:''}.`);
       }catch(error){
         console.error('broker quote import failed',error);
-        setToast('CSV não aplicado: '+error.message);
+        notify('CSV não aplicado: '+error.message);
       }
-      setTimeout(()=>setToast(''),7000);
     });
   },[pos,cfg]);
   const exportBrokerQuoteTemplate=useCallback(()=>{
@@ -4390,8 +4440,7 @@ function App(){
     const csv=rows.map(row=>row.map(csvEscapeCell).join(';')).join('\r\n');
     downloadBlob(new Blob(['\uFEFF',csv],{type:'text/csv;charset=utf-8'}),
       'broker_quotes_template_'+new Date().toISOString().slice(0,10)+'.csv');
-    setToast('Template CSV criado. Preenche Price e Date com os dados do broker; Last Known Price é apenas referência.');
-    setTimeout(()=>setToast(''),5000);
+    notify('Template CSV criado. Preenche Price e Date com os dados do broker; Last Known Price é apenas referência.');
   },[pos]);
   const exportCSV=useCallback(()=>{
     const today=new Date().toISOString().slice(0,10);
@@ -4738,8 +4787,7 @@ function App(){
     const blob=new Blob(['\uFEFF'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');a.href=url;a.download='folio_full_'+today+'.csv';a.click();URL.revokeObjectURL(url);
-    setToast('CSV exportado — 18 secções: posições, vendidas, métricas, rendimento, dividendos, transacções, config, tax por ano, tax por país (Anexo J), wealth, net worth');
-    setTimeout(()=>setToast(''),5000);
+    notify('CSV exportado — 18 secções: posições, vendidas, métricas, rendimento, dividendos, transacções, config, tax por ano, tax por país (Anexo J), wealth, net worth');
   },[pos,sold,qual,income,cfg,wealth]);
 
   const safePos=useMemo(()=>(pos||[]).map(p=>enrich({...p,id:p.id||p.t})),[pos]);
@@ -4794,7 +4842,7 @@ function App(){
       TABS.map(([k,l])=>h('button',{key:k,className:'tab'+(tab===k?' tab-on':''),
         onClick:()=>{setTab(k);setMenuOpen(false);}},l))
     ),
-    h('div',{className:'page'},
+    h('div',{className:'page'},h(PageErrorBoundary,{key:tab,onExport:exportData},
       tab==='dashboard'&&h(Dash,{pos:safePos,qual:safeQual,income:safeInc,sold:safeSold,cfg,setCfg,wealth}),
       tab==='portfolio'&&h(Port,{pos:safePos,setPos,income:safeInc,qual:safeQual,setQual,cfg,sold:safeSold,setSold}),
       tab==='transactions'&&h(TransactionsPage,{cfg,pos:safePos,setPos,sold:safeSold,setSold,income:safeInc,qual:safeQual,setQual}),
@@ -4804,9 +4852,10 @@ function App(){
       tab==='teses'&&h(TesesPage,{pos:safePos,teses,qual:safeQual}),
       tab==='patrimonio'&&h(PatrimonioPage,{wealth,pos:safePos,cfg}),
       tab==='taxcalc'&&h(TaxCalcPage,{pos:safePos,income:safeInc,qual:safeQual,sold:safeSold,cfg,wealth}),
-    ),
-    toast&&h('div',{className:'toast'},toast),
-    selectedTicker&&h(StockModal,{ticker:selectedTicker,pos:safePos,sold:safeSold,income:safeInc,qual:safeQual,cfg,onClose:()=>setSelectedTicker(null)})
+    )),
+    toast&&h('div',{className:'toast',role:'status','aria-live':'polite'},toast),
+    selectedTicker&&h(PageErrorBoundary,{key:selectedTicker,onDismiss:()=>setSelectedTicker(null)},
+      h(StockModal,{ticker:selectedTicker,pos:safePos,sold:safeSold,income:safeInc,qual:safeQual,cfg,onClose:()=>setSelectedTicker(null)}))
    )
   );
 }
@@ -5717,7 +5766,7 @@ function Port({pos,setPos,income,qual,setQual,cfg,sold,setSold}){
       if(typeof va==='string')return sd==='asc'?va.localeCompare(vb):vb.localeCompare(va);
       return sd==='asc'?va-vb:vb-va;
     });
-  },[pos,flt,sf,sd,tots]);
+  },[pos,flt,sf,sd,tots,qualMap,histIncome]);
 
   /* -- Totals / averages row for the table below (follows the active filter) --
      Money columns are summed; with 'Todas'/'EUR'/'ETF' the USD positions are converted to EUR
@@ -6002,13 +6051,15 @@ function PricePanel({cfg,setCfg,pos,setPos,wealth}){
     ...referenceTickers(wealth,pos,cfg).map(t=>({t,cat:'EUR',cv:cfg?.refPrices?.[t]?.cv||null,ref:true}))];
   const symbolFor=p=>(cfg?.priceSymbols&&cfg.priceSymbols[p.t])||defaultPriceSymbol(p);
   const setKey=(id,value)=>{const v=value.trim();setKeys(k=>({...k,[id]:v}));writePriceKey(id,v);};
-  const changeProvider=id=>{setProvider(id);setRows([]);setMessage('');setCfg({...cfg,priceProvider:id});};
-  const changeFallback=id=>{setFallback(id);setRows([]);setMessage('');setCfg({...cfg,priceFallback:id});};
+  const changeProvider=id=>{setProvider(id);setRows([]);setMessage('');setCfg(c=>({...c,priceProvider:id}));};
+  const changeFallback=id=>{setFallback(id);setRows([]);setMessage('');setCfg(c=>({...c,priceFallback:id}));};
   const changeSymbol=(p,value)=>{
     const symbol=value.trim().toUpperCase();
-    const symbols={...(cfg?.priceSymbols||{})};
-    if(!symbol||symbol===defaultPriceSymbol(p))delete symbols[p.t];else symbols[p.t]=symbol;
-    setCfg({...cfg,priceSymbols:symbols});
+    setCfg(c=>{
+      const symbols={...(c?.priceSymbols||{})};
+      if(!symbol||symbol===defaultPriceSymbol(p))delete symbols[p.t];else symbols[p.t]=symbol;
+      return{...c,priceSymbols:symbols};
+    });
   };
   const run=async()=>{
     if(!keys[provider]){setMessage('Falta a chave da API de '+PRICE_PROVIDERS[provider].name+'.');return;}
@@ -6070,10 +6121,12 @@ function PricePanel({cfg,setCfg,pos,setPos,wealth}){
       const r=byTicker.get(p.t);
       return r?{...p,cv:Math.round(r.price*10000)/10000,cvAsOf:r.date||today,cvSource:PRICE_PROVIDERS[r.via].name}:p;
     }));
-    const refPrices={...(cfg?.refPrices||{})};
-    toApply.filter(r=>r.ref).forEach(r=>{refPrices[r.t]={cv:Math.round(r.price*10000)/10000,asOf:r.date||today,source:PRICE_PROVIDERS[r.via].name};});
     const sources=[...new Set(toApply.map(r=>PRICE_PROVIDERS[r.via].name))].join(' + ');
-    setCfg({...cfg,refPrices,priceProvider:provider,priceFallback:fallback,quotesImportedAt:new Date().toISOString(),quotesSource:sources});
+    setCfg(c=>{
+      const refPrices={...(c?.refPrices||{})};
+      toApply.filter(r=>r.ref).forEach(r=>{refPrices[r.t]={cv:Math.round(r.price*10000)/10000,asOf:r.date||today,source:PRICE_PROVIDERS[r.via].name};});
+      return{...c,refPrices,priceProvider:provider,priceFallback:fallback,quotesImportedAt:new Date().toISOString(),quotesSource:sources};
+    });
     setMessage(`${toApply.length} cotações aplicadas.`);
     setRows(rows.map(r=>r.status==='ok'&&r.apply?{...r,status:'applied',apply:false}:r));
   };
@@ -6095,7 +6148,7 @@ function PricePanel({cfg,setCfg,pos,setPos,wealth}){
     h('div',{style:{fontSize:10,color:'var(--muted)',marginBottom:8,lineHeight:1.5}},
       'Pede as cotações das posições activas, converte para a moeda de cada posição com as taxas do BCE e mostra tudo antes de aplicar. As chaves ficam guardadas neste browser.'),
     h('label',{style:{display:'flex',gap:6,alignItems:'flex-start',fontSize:10,color:'var(--muted)',marginBottom:8,lineHeight:1.5,cursor:'pointer'}},
-      h('input',{type:'checkbox',checked:!!cfg?.exportPriceKeys,onChange:e=>setCfg({...cfg,exportPriceKeys:e.target.checked}),style:{marginTop:2}}),
+      h('input',{type:'checkbox',checked:!!cfg?.exportPriceKeys,onChange:e=>{const checked=e.target.checked;setCfg(c=>({...c,exportPriceKeys:checked}));},style:{marginTop:2}}),
       h('span',null,'Incluir as chaves no income-factory.json ao exportar, para as levar para outro dispositivo. ',
         h('span',{style:{color:cfg?.exportPriceKeys?'var(--gold)':'var(--muted)'}},'Quem tiver o ficheiro fica com as chaves: nunca o ponhas no GitHub nem o partilhes.'))),
     providerRow('Fornecedor principal',provider,changeProvider,opts()),
@@ -6143,7 +6196,7 @@ function Conf({wealth,cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onR
     try{
       const{date,rates}=await fetchEcbRates();
       const usd=Math.round(rates.USD*10000)/10000;
-      const next={...cfg,fxEurUsd:usd,fxEurUsdAsOf:date};
+      const next={fxEurUsd:usd,fxEurUsdAsOf:date};
       // Daily history used by the Tax page: fill everything from the first
       // transaction (or the last stored day) up to today with ECB reference rates.
       const old=cfg?.fxHistory&&typeof cfg.fxHistory.rates==='object'?cfg.fxHistory:null;
@@ -6157,7 +6210,7 @@ function Conf({wealth,cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onR
       next.fxHistory={...(old||{}),unit:'USD por 1 EUR',
         source:'BCE · taxas de referência diárias do euro (via Frankfurter)'+(old?.source&&!/BCE/.test(old.source)?' · antes: '+old.source:''),
         asOf:days[days.length-1],rates:merged};
-      setCfg(next);dbs('fc',next).catch(e=>console.error('save exchange rate failed',e));
+      setCfg(c=>({...c,...next}));
       setFxStatus({text:`Actualizado: ${usd.toFixed(4)} (BCE, ${date}) · histórico ${days[0]} → ${days[days.length-1]} (${Object.keys(hist).length} dias novos)`});
     }catch(error){setFxStatus({error:true,text:error.message});}
   };
@@ -6178,8 +6231,8 @@ function Conf({wealth,cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onR
         asOf=asOf&&asOf<r.asOf?asOf:r.asOf;
       }
       next.asOf=asOf;
-      const nextCfg={...cfg,benchmarkCache:next};
-      setCfg(nextCfg);dbs('fc',nextCfg).catch(e=>console.error('save benchmarks failed',e));
+      // The loop takes ~13 s per benchmark: apply to the latest config, not the one captured at click time.
+      setCfg(c=>({...c,benchmarkCache:next}));
       setBenchStatus({text:'Actualizado com dados até '+asOf+'.'});
     }catch(error){setBenchStatus({error:true,text:error.message});}
   };
@@ -6267,7 +6320,7 @@ function Conf({wealth,cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onR
               defaultValue:(cfg?.fxEurUsd||1.08).toFixed(4),
               onBlur:e=>{
                 const v=parseFloat(e.target.value);
-                if(!isNaN(v)&&v>0){const next={...cfg,fxEurUsd:v};setCfg(next);dbs('fc',next).catch(e=>console.error('save exchange rate failed',e));}
+                if(!isNaN(v)&&v>0){setCfg(c=>({...c,fxEurUsd:v}));}
                 else{e.target.value=(cfg?.fxEurUsd||1.08).toFixed(4);}
               },
               onKeyDown:e=>e.key==='Enter'&&e.target.blur(),
@@ -6290,7 +6343,7 @@ function Conf({wealth,cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onR
               defaultValue:cfg?.portfolioGoal||100000,
               onBlur:e=>{
                 const v=parseFloat(e.target.value);
-                if(!isNaN(v)&&v>0){const next={...cfg,portfolioGoal:v};setCfg(next);dbs('fc',next).catch(e=>console.error('save portfolio goal failed',e));}
+                if(!isNaN(v)&&v>0){setCfg(c=>({...c,portfolioGoal:v}));}
                 else{e.target.value=cfg?.portfolioGoal||100000;}
               },
               onKeyDown:e=>e.key==='Enter'&&e.target.blur(),
@@ -6313,7 +6366,7 @@ function Conf({wealth,cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onR
               defaultValue:((cfg?.taxRate||0.28)*100).toFixed(1),
               onBlur:e=>{
                 const v=parseFloat(e.target.value);
-                if(!isNaN(v)&&v>0&&v<=100){const next={...cfg,taxRate:v/100};setCfg(next);dbs('fc',next).catch(e=>console.error('save tax rate failed',e));}
+                if(!isNaN(v)&&v>0&&v<=100){setCfg(c=>({...c,taxRate:v/100}));}
                 else{e.target.value=((cfg?.taxRate||0.28)*100).toFixed(1);}
               },
               onKeyDown:e=>e.key==='Enter'&&e.target.blur(),
@@ -6618,14 +6671,14 @@ function AllTransactions({pos,sold,cfg}){
     h('div',{className:'card-table overflow-x-auto'},
       h('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:12}},
         h('thead',null,h('tr',null,
-          h('th',{style:thS,onClick:sort('date')},'Data '+col('date')),
+          h('th',pressable(sort('date'),{style:thS}),'Data '+col('date')),
           h('th',{style:thS},'Tipo'),
-          h('th',{style:thS,onClick:sort('ticker')},'Ticker '+col('ticker')),
-          h('th',{style:thS,onClick:sort('broker')},'Corretora '+col('broker')),
-          h('th',{style:thR,onClick:sort('n')},'Qtd '+col('n')),
-          h('th',{style:thR,onClick:sort('price')},'Preço '+col('price')),
-          h('th',{style:thR,onClick:sort('total')},'Total '+col('total')),
-          h('th',{style:thR,onClick:sort('fee')},'Fee '+col('fee')),
+          h('th',pressable(sort('ticker'),{style:thS}),'Ticker '+col('ticker')),
+          h('th',pressable(sort('broker'),{style:thS}),'Corretora '+col('broker')),
+          h('th',pressable(sort('n'),{style:thR}),'Qtd '+col('n')),
+          h('th',pressable(sort('price'),{style:thR}),'Preço '+col('price')),
+          h('th',pressable(sort('total'),{style:thR}),'Total '+col('total')),
+          h('th',pressable(sort('fee'),{style:thR}),'Fee '+col('fee')),
           h('th',{style:{...thS,textAlign:'center'}},'Estado'),
         )),
         h('tbody',null,
@@ -8405,7 +8458,7 @@ function IncRow({p,sm,qualMap,income,DISP_YEARS,GROWTH,selected,onToggle}){
   const hasAny=total>0||est;
   if(!hasAny)return null;
   const isSel=selected&&selected.has(p.t);
-  return h('tr',{key:p.t,onClick:onToggle?()=>onToggle(p.t):undefined,title:onToggle?'Clica para filtrar o mapa de rendimento':undefined,
+  return h('tr',{key:p.t,...(onToggle?pressable(()=>onToggle(p.t)):{}),title:onToggle?'Clica para filtrar o mapa de rendimento':undefined,
     style:{cursor:onToggle?'pointer':undefined,background:isSel?'rgba(59,130,246,.14)':undefined,boxShadow:isSel?'inset 3px 0 0 var(--blue)':undefined}},
     h('td',null,h(TickerLink,{t:p.t,className:'font-semibold'}),
       p._closed&&h('span',{style:{fontSize:9,color:'var(--muted)',marginLeft:6,padding:'1px 5px',border:'1px solid var(--border)',borderRadius:4}},'vendida')),
@@ -9555,7 +9608,7 @@ function SoldPage({sold,setSold,cfg}){
   );
 }
 
-ReactDOM.render(h(App),document.getElementById('root'));
+ReactDOM.render(h(AppErrorBoundary,null,h(App)),document.getElementById('root'));
 </script>
 <script>
 if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(e){console.warn('SW falhou',e)})})}
