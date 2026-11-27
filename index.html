@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-25.7';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -6749,13 +6749,25 @@ function HoldingsEdit({pos,setPos,cfg,qual}){
 }
 
 // ── Shared BarChart (used in Income + DividendosPage) ───────────────────────
-const BarChart=memo(function BarChart({tots,color,label,sm,estTotal}){
+const BarChart=memo(function BarChart({tots,color,label,sm,estTotal,growth}){
   const CHART_YEARS=YEARS.filter(y=>y>=2023);
   const est=estTotal||0;
-  const maxV=Math.max(...CHART_YEARS.map(y=>tots[y]||0),est,1);
+  // Next-year projection: this year's full estimate grown by cfg.divGrowth
+  // (same formula as "Est. next year" in the income table).
+  const nextEst=est>0&&growth>0?est*growth:0;
+  const maxV=Math.max(...CHART_YEARS.map(y=>tots[y]||0),est,nextEst,1);
+  const hatch=c=>'repeating-linear-gradient(45deg,'+c+' 0,'+c+' 3px,transparent 3px,transparent 6px)';
   return h('div',{className:'flex-1'},
     h('div',{style:{fontSize:10,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--muted)',marginBottom:10}},label),
     h('div',{style:{display:'flex',gap:6,alignItems:'flex-end',height:176}},
+      nextEst>0&&h('div',{key:'next',title:'Previsão: estimativa de '+CUR_YEAR+' × (1 + crescimento do dividendo de '+((growth-1)*100).toFixed(1)+'%, em Config)',
+        style:{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:5}},
+        h('div',{style:{fontSize:9,fontWeight:700,color:'var(--green)'}},'+'+((growth-1)*100).toFixed(0)+'%'),
+        h('div',{style:{fontSize:9,color:'var(--muted)'}},'est. '+sm+fn(nextEst,0)),
+        h('div',{style:{width:'100%',height:Math.max(nextEst/maxV*100*0.92,2)+'px',borderRadius:'3px 3px 0 0',
+          background:hatch(color),border:'1px dashed '+color,opacity:.6}}),
+        h('div',{style:{fontSize:9,color:'var(--muted)'}},(CUR_YEAR+1)+' (prev.)')
+      ),
       CHART_YEARS.map((y,i)=>{
         const val=tots[y]||0;
         const prev=i<CHART_YEARS.length-1?tots[CHART_YEARS[i+1]]||0:null;
@@ -6776,7 +6788,7 @@ const BarChart=memo(function BarChart({tots,color,label,sm,estTotal}){
             :(val>0&&h('div',{style:{fontSize:9,color:isLast?'var(--gold)':'var(--muted)'}},sm+fn(val,0))),
           h('div',{style:{width:'100%',display:'flex',flexDirection:'column',borderRadius:'3px 3px 0 0',overflow:'hidden'}},
             isLast&&remaining>0&&h('div',{style:{width:'100%',height:Math.max(remPct*0.92,2)+'px',
-              background:'repeating-linear-gradient(45deg,'+(isLast?'var(--gold)':color)+' 0,'+(isLast?'var(--gold)':color)+' 3px,transparent 3px,transparent 6px)',
+              background:hatch(isLast?'var(--gold)':color),
               opacity:.35}}),
             h('div',{style:{width:'100%',height:Math.max(pct*0.92,val>0?2:0)+'px',background:isLast?'var(--gold)':color,opacity:.85}})
           ),
@@ -8420,8 +8432,8 @@ function DividendosPage({pos,income,qual,sold,cfg}){
       const estEUR=(pos||[]).filter(p=>p.cat!=='USD'&&p.n>0&&p.cv>0).reduce((s,p)=>{const dy=getQual(qualMap,p.t)?.dy||0;return s+(dy>0?dy*p.n*p.cv:0);},0);
       return h('div',{className:'mb-4'},
         h('div',{className:'grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3'},
-          h('div',{className:'card-sm px-5'},h(BarChart,{tots:tUf,color:'var(--blue)',label:'USD — Evolução Anual (incl. posições fechadas) · Total recebido $'+fn(tUf.total,0),sm:'$',estTotal:estUSD})),
-          h('div',{className:'card-sm px-5'},h(BarChart,{tots:tEf,color:'var(--green)',label:'EUR — Evolução Anual (incl. posições fechadas) · Total recebido €'+fn(tEf.total,0),sm:'€',estTotal:estEUR}))
+          h('div',{className:'card-sm px-5'},h(BarChart,{tots:tUf,color:'var(--blue)',label:'USD — Evolução Anual (incl. posições fechadas) · Total recebido $'+fn(tUf.total,0),sm:'$',estTotal:estUSD,growth:1+(cfg?.divGrowth??0.03)})),
+          h('div',{className:'card-sm px-5'},h(BarChart,{tots:tEf,color:'var(--green)',label:'EUR — Evolução Anual (incl. posições fechadas) · Total recebido €'+fn(tEf.total,0),sm:'€',estTotal:estEUR,growth:1+(cfg?.divGrowth??0.03)}))
         ),
       );
     })(),
