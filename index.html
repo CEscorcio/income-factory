@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.15';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.16';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -8897,7 +8897,9 @@ function TesesList(items,color){
 // ── Teses: cartão "Dividends" (histórico anual FY: DPS, yield, payout) ──────────────
 // Dados em teses.json -> <TICKER>.dividends = {currency,source,history:[{year,dps,yield,payout}]}  (yield/payout em decimal)
 function TesesDividends({data}){
-  const[metric,setMetric]=useState('dps');
+  // All three series side by side per year. Each one is scaled to its own maximum,
+  // since DPS (currency) and yield/payout (%) have different units.
+  const[hidden,setHidden]=useState({});
   const hist=(Array.isArray(data?.history)?data.history:[]).filter(r=>r&&Number.isFinite(r.year)).sort((a,b)=>a.year-b.year);
   if(!hist.length)return null;
   const cur=!data.currency||data.currency==='USD'?'$':data.currency==='EUR'?'€':data.currency+' ';
@@ -8907,9 +8909,9 @@ function TesesDividends({data}){
     yield:{label:'Dividend yield',short:'Yield',col:'var(--blue)',fmt:v=>(v*100).toFixed(2)+'%'},
     payout:{label:'Payout ratio',short:'Payout',col:'var(--gold)',fmt:v=>(v*100).toFixed(2)+'%'}
   };
-  const m=M[metric];
-  const vals=hist.map(r=>Number.isFinite(r[metric])?r[metric]:null);
-  const max=Math.max(0,...vals.filter(v=>v!=null))||1;
+  const KEYS=['dps','yield','payout'];
+  const shown=KEYS.filter(k=>!hidden[k]&&hist.some(r=>Number.isFinite(r[k])));
+  const maxOf=Object.fromEntries(KEYS.map(k=>[k,Math.max(0,...hist.map(r=>Number.isFinite(r[k])?r[k]:0))||1]));
   const CH=140;
   const fm=(k,r)=>Number.isFinite(r[k])?M[k].fmt(r[k]):'—';
   const tip=(r,i)=>{
@@ -8917,25 +8919,31 @@ function TesesDividends({data}){
     const g=i>0&&Number.isFinite(r.dps)&&prev&&prev.dps>0?' ('+((r.dps/prev.dps-1)>=0?'+':'')+((r.dps/prev.dps-1)*100).toFixed(1)+'% vs '+prev.year+')':'';
     return per+' '+r.year+' · DPS '+fm('dps',r)+g+' · Yield '+fm('yield',r)+' · Payout '+fm('payout',r);
   };
-  const seg=k=>h('button',{key:k,onClick:()=>setMetric(k),style:{
-    padding:'5px 12px',borderRadius:8,border:'1px solid',fontSize:11,fontWeight:600,cursor:'pointer',
-    background:metric===k?'var(--surface)':'transparent',borderColor:metric===k?'var(--border)':'transparent',
-    color:metric===k?'var(--text)':'var(--muted)'}},M[k].short);
+  const dot=col=>h('span',{style:{display:'inline-block',width:9,height:9,borderRadius:3,background:col,marginRight:6,flexShrink:0}});
+  const legend=k=>h('button',{key:k,onClick:()=>setHidden(x=>({...x,[k]:!x[k]})),title:hidden[k]?'Mostrar':'Esconder',style:{
+    display:'flex',alignItems:'center',padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:11,fontWeight:600,cursor:'pointer',
+    background:hidden[k]?'transparent':'var(--surface)',color:hidden[k]?'var(--muted)':'var(--text)',opacity:hidden[k]?.55:1}},
+    dot(M[k].col),M[k].short);
   return h('div',{className:'card mb-4'},
     h(Shdr,{title:'Dividends',hint:per+' · '+(data.currency||'USD')+(data.source?' · '+data.source:'')}),
     h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8,margin:'10px 0 6px'}},
-      h('div',{style:{fontSize:11,color:'var(--muted)'}},m.label+' · '+hist[0].year+'–'+hist[hist.length-1].year),
-      h('div',{style:{display:'flex',gap:4,padding:3,background:'var(--s2)',border:'1px solid var(--border)',borderRadius:10}},['dps','yield','payout'].map(seg))
+      h('div',{style:{fontSize:11,color:'var(--muted)'}},'DPS, yield e payout · '+hist[0].year+'–'+hist[hist.length-1].year+' · cada métrica na sua escala'),
+      h('div',{style:{display:'flex',gap:4,padding:3,background:'var(--s2)',border:'1px solid var(--border)',borderRadius:10}},KEYS.map(legend))
     ),
     h('div',{style:{overflowX:'auto'}},
-      h('div',{style:{display:'flex',alignItems:'flex-end',gap:6,height:CH+44,minWidth:hist.length*44,paddingTop:4}},
+      h('div',{style:{display:'flex',alignItems:'flex-end',gap:10,height:CH+44,minWidth:hist.length*Math.max(36,shown.length*16+12),paddingTop:4}},
         hist.map((r,i)=>{
-          const v=vals[i];
           const last=i===hist.length-1;
-          return h('div',{key:r.year,title:tip(r,i),style:{flex:1,minWidth:36,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',gap:4}},
-            h('div',{style:{fontSize:10,fontFamily:'var(--mono)',color:last?m.col:'var(--muted)',fontWeight:last?700:500}},v==null?'—':m.fmt(v)),
-            h('div',{style:{width:'70%',maxWidth:34,height:v==null?0:Math.max(3,Math.round(v/max*CH)),background:m.col,opacity:last?1:.7,borderRadius:'4px 4px 0 0'}}),
-            h('div',{style:{fontSize:10,color:'var(--muted)'}},r.year)
+          return h('div',{key:r.year,title:tip(r,i),style:{flex:1,minWidth:Math.max(30,shown.length*14),display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',gap:4}},
+            h('div',{style:{display:'flex',alignItems:'flex-end',justifyContent:'center',gap:2,width:'100%',height:CH+16}},
+              shown.map(k=>{
+                const v=Number.isFinite(r[k])?r[k]:null;
+                return h('div',{key:k,title:M[k].label+' '+r.year+': '+fm(k,r),style:{flex:1,maxWidth:16,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',height:'100%'}},
+                  h('div',{style:{width:'100%',height:v==null?0:Math.max(3,Math.round(v/maxOf[k]*CH)),background:M[k].col,opacity:last?1:.75,borderRadius:'3px 3px 0 0'}})
+                );
+              })
+            ),
+            h('div',{style:{fontSize:10,color:last?'var(--text)':'var(--muted)',fontWeight:last?700:400}},r.year)
           );
         })
       )
@@ -8946,9 +8954,9 @@ function TesesDividends({data}){
           h('th',{className:'text-left'},per),
           hist.map(r=>h('th',{key:r.year,className:'text-right'},r.year))
         )),
-        h('tbody',null,['dps','yield','payout'].map(k=>h('tr',{key:k},
-          h('td',{className:'text-left',style:{whiteSpace:'nowrap',color:'var(--muted)'}},M[k].label),
-          hist.map(r=>h('td',{key:r.year,className:'text-right',style:{fontFamily:'var(--mono)'}},fm(k,r)))
+        h('tbody',null,KEYS.map(k=>h('tr',{key:k},
+          h('td',{className:'text-left',style:{whiteSpace:'nowrap',color:'var(--muted)'}},h('span',{style:{display:'inline-flex',alignItems:'center'}},dot(M[k].col),M[k].label)),
+          hist.map(r=>h('td',{key:r.year,className:'text-right',style:{fontFamily:'var(--mono)',color:Number.isFinite(r[k])?M[k].col:'var(--muted)'}},fm(k,r)))
         )))
       )
     )
