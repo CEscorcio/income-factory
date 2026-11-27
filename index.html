@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.20';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.21';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3009,7 +3009,9 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
   const fxL=useMemo(()=>makeFxLookup(cfg),[cfg]);
   const cgRows=useMemo(()=>{
     const events=buildCapitalGainsEvents(pos,sold,fxL.on,TAX_RATE);
+    // Everything shown on this page is in EUR: tax = the event's share of the year's tax.
     return applyAnnualCapitalGainsTax(events).events
+      .map(event=>({...event,tax:event.taxEur||0}))
       .filter(event=>year==='ALL'||event.date.startsWith(year))
       .sort((a,b)=>new Date(b.date)-new Date(a.date));
   },[sold,pos,year,TAX_RATE,fxL]);
@@ -3156,10 +3158,10 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
     ),
 
     (()=>{
-      const wins=cgRows.filter(r=>r.pl>0);
-      const losses=cgRows.filter(r=>r.pl<0);
-      const maisValias=wins.reduce((s,r)=>s+r.pl,0);
-      const menosValias=Math.abs(losses.reduce((s,r)=>s+r.pl,0));
+      const wins=cgRows.filter(r=>r.plEur>0);
+      const losses=cgRows.filter(r=>r.plEur<0);
+      const maisValias=wins.reduce((s,r)=>s+r.plEur,0);
+      const menosValias=Math.abs(losses.reduce((s,r)=>s+r.plEur,0));
       const dividendos=divTotal.gross;
       const juros=(wealthJuros||[]).reduce((s,r)=>s+yearVal(r,year),0);
       const taxRate=TAX_RATE;
@@ -3218,10 +3220,10 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
                     h('td',{style:{textAlign:'right',fontFamily:'var(--mono)'}},r.n),
                     h('td',{style:{textAlign:'right',fontFamily:'var(--mono)'}},r.sym+fn(r.avgBuyPrice)),
                     h('td',{style:{textAlign:'right',fontFamily:'var(--mono)'}},r.sym+fn(r.sellPrice)),
-                    h('td',{className:'text-right'},fe(r.proceeds)),
-                    h('td',{className:'text-right'},fe(r.costBasis)),
-                    h('td',{className:'text-right text-[var(--muted)]'},r.fee>0?fe(r.fee):'—'),
-                    h('td',{style:{textAlign:'right',color:plCol(r.pl)}},fp(r.pl)),
+                    h('td',{className:'text-right',title:r.sym==='$'?'$'+fn(r.proceeds)+' ÷ '+(r.fxSale||0).toFixed(4)+' (BCE, '+r.date+')':undefined},fe(r.proceedsEur)),
+                    h('td',{className:'text-right',title:r.sym==='$'?'$'+fn(r.costBasis)+' convertido ao câmbio BCE da data de cada compra':undefined},fe(r.costEur)),
+                    h('td',{className:'text-right text-[var(--muted)]'},r.feeEur>0?fe(r.feeEur):'—'),
+                    h('td',{style:{textAlign:'right',color:plCol(r.plEur)},title:r.sym==='$'?'Em USD: '+(r.pl>=0?'+$':'-$')+fn(Math.abs(r.pl))+' · a diferença é o efeito cambial':undefined},fp(r.plEur)),
                     h('td',{className:'text-right text-[var(--muted)]'},(r.rate*100).toFixed(0)+'%'),
                     h('td',{className:'text-right text-[var(--red)]'},r.tax>0?'-€'+r.tax.toFixed(2):'€0.00'),
                   ),
@@ -3501,8 +3503,8 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
       cgRows.forEach(r=>{
         const country=tickerCountry[r.ticker]||tickerCountry[normTicker(r.ticker)]||'🌐';
         if(!cgByCountry[country])cgByCountry[country]={gain:0,loss:0,tax:0,count:0};
-        if(r.pl>0)cgByCountry[country].gain+=r.pl; else cgByCountry[country].loss+=r.pl;
-        cgByCountry[country].tax+=r.tax;
+        if(r.plEur>0)cgByCountry[country].gain+=r.plEur; else cgByCountry[country].loss+=r.plEur;
+        cgByCountry[country].tax+=r.tax||0;
         cgByCountry[country].count++;
       });
       const cgCountries=Object.keys(cgByCountry).sort((a,b)=>
@@ -3554,7 +3556,7 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
                     h('td',{className:'text-right',style:{color:'var(--green)'}},d.gain>0?'€'+d.gain.toFixed(2):'—'),
                     h('td',{className:'text-right',style:{color:'var(--red)'}},d.loss<0?'-€'+Math.abs(d.loss).toFixed(2):'—'),
                     h('td',{className:'text-right',style:{fontWeight:700,color:net>=0?'var(--green)':'var(--red)'}},(net>=0?'€':'-€')+Math.abs(net).toFixed(2)),
-                    h('td',{className:'text-right',style:{color:'var(--red)'}},'-€'+d.tax.toFixed(2))
+                    h('td',{className:'text-right',style:{color:d.tax>0.005?'var(--red)':'var(--muted)'}},d.tax>0.005?'-€'+d.tax.toFixed(2):'—')
                   );
                 })
               ),
@@ -3563,7 +3565,7 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
                 h('td',{className:'text-right',style:{color:'var(--green)'}},'€'+cgGrandGain.toFixed(2)),
                 h('td',{className:'text-right',style:{color:'var(--red)'}},'-€'+Math.abs(cgGrandLoss).toFixed(2)),
                 h('td',{className:'text-right'},(cgGrandGain+cgGrandLoss>=0?'€':'-€')+Math.abs(cgGrandGain+cgGrandLoss).toFixed(2)),
-                h('td',{className:'text-right',style:{color:'var(--red)'}},'-€'+cgGrandTax.toFixed(2))
+                h('td',{className:'text-right',style:{color:cgGrandTax>0.005?'var(--red)':'var(--muted)'}},cgGrandTax>0.005?'-€'+cgGrandTax.toFixed(2):'—')
               ))
             )
             )
@@ -3656,16 +3658,16 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
             const rows=cgRows.filter(r=>{
               const y=r.yrs||0;
               const inTier=y>=tier.from&&(tier.to===null||y<tier.to);
-              return inTier&&r.pl>0; // only gains, not losses
+              return inTier&&r.plEur>0; // only gains, not losses
             });
-            const totalGain=rows.reduce((s,r)=>s+r.pl,0);
-            const taxPaid=rows.reduce((s,r)=>s+r.tax,0);
+            const totalGain=rows.reduce((s,r)=>s+r.plEur,0);
+            const taxPaid=rows.reduce((s,r)=>s+(r.tax||0),0);
             const taxFull=totalGain*TAX_RATE;
             const saved=taxFull-taxPaid;
             return{...tier,count:rows.length,totalGain,taxPaid,saved};
           });
           const totalSaved=tierData.reduce((s,t)=>s+t.saved,0);
-          const hasData=cgRows.some(r=>r.pl>0);
+          const hasData=cgRows.some(r=>r.plEur>0);
           return h('div',null,
             h('div',{className:'grid grid-cols-2 gap-3',style:{marginBottom:12}},
               tierData.map((tier,i)=>{
