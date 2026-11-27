@@ -106,6 +106,7 @@ Notes:
 ### 2.6b Annual dividend bars (Dividends page)
 One chart per currency (USD; EUR + ETF), from 2023 to the current year, including closed positions.
 - **Current year**: solid part = received so far; hatched part = rest of the year's estimate (`dy × shares × price` per position).
+- **Rendimento por Posição table**: *Est. current year* = `dy × shares × price` per position; *Est. next year* = that × (1 + `cfg.divGrowth`). The totals match the bars.
 - **Next year (prev.)**: hatched bar = current-year estimate × (1 + `cfg.divGrowth`), the same formula as "Est. next year" in the income table. The % above it is that growth rate.
 
 ### 2.7 DRIP (Dividends page)
