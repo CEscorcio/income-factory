@@ -221,8 +221,6 @@ Currently written: JPM, PEP, PG, MAIN, O, KO, XOM, TROW, COR.LS, DG.PA, NOV.DE, 
   "financialsYears": ["2023", "2024", "2025"],
   "financials": [ { "metric": "Revenue", "values": ["$45,75B", "$46,50B", "$47,20B"] } ],   // one value per year
   "balanceSheet": "text",
-  "dividendThesisText": "text",
-  "dividendThesis": [ { "label": "Dividend yield", "value": "~2,4%" } ],
   "growthThesis": "text",
   "bearCase": ["…"],
   "whatWouldBreakThesis": ["…"],
@@ -243,7 +241,7 @@ Currently written: JPM, PEP, PG, MAIN, O, KO, XOM, TROW, COR.LS, DG.PA, NOV.DE, 
 }
 ```
 
-Section order on the Teses page: 1 Tese · 2 Negócio · 3 Moat · 4 Principal Risco · 5 Resposta Estratégica · 6 Financial Quality · 7 Balance Sheet · 8 Dividend Thesis · 9 Growth Thesis · 10 Bear Case · 11 O Que Destruiria a Tese · 12 Valuation · 13 Scorecard · 14 Decisão Final. The Factores, Sinais, Qualidade do Dividendo and Fundamentais blocks above them come from `quality`, not from the thesis.
+Section order on the Teses page: 1 Tese · 2 Negócio · 3 Moat · 4 Principal Risco · 5 Resposta Estratégica · 6 Financial Quality · 7 Balance Sheet · 8 Growth Thesis · 9 Bear Case · 10 O Que Destruiria a Tese · 11 Valuation · 12 Scorecard · 13 Decisão Final. The Factores, Sinais, Qualidade do Dividendo and Fundamentais blocks above them come from `quality`, not from the thesis.
 
 Conventions used so far:
 - Text is in European Portuguese. Numbers in strings use a decimal comma (`$2,12`, `2,41%`). Numeric fields (`price`, `yield`, `history`) use JSON numbers with a decimal point.
