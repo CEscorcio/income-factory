@@ -135,6 +135,9 @@ Keys written by the price and exchange-rate updates:
 | `priceSymbols` | `{ "<ticker>": "<symbol>" }` overrides for tickers the provider knows by another symbol, e.g. `{ "LGEN": "LGEN.L" }`. Format `TICKER` (US) or `TICKER.EXCHANGE` with `L`, `AS`, `LS`, `MI`, `DE`, `F`, `BE`, `PA`, `MC`, `CO`. |
 | `quotesImportedAt`, `quotesSource` | When prices were last updated, and from where. |
 | `refPrices` | `{ "<ticker>": { "cv": number, "asOf": date, "source": string } }`: prices for tickers held outside the portfolio (e.g. VWCE.DE in `wealth.claudiaInvestimentos`), in EUR. Used when no active position has that ticker; updated by Cotações online. |
+| `fxHistory` | `{ unit, source, asOf, rates: { "YYYY-MM-DD": USD per 1 EUR } }`. Filled by the **BCE** button with ECB reference rates from the first transaction to today. The Tax page converts each sale at its date and each lot's cost at its purchase date; dividends at the year's average rate. |
+| `benchmarkCache` | `{ sp500:{byYear,source}, msciWorld:{byYear,source}, asOf }`. Yearly total returns (`"2026 YTD"` for the current year). **Actualizar (SPY, URTH)** computes them from Alpha Vantage monthly adjusted closes. |
+| `dividendEvents` | `{ "<ticker>": { fetchedAt, events:[ { ex, pay, amount } ] } }`: real dividend dates and amount per share (US listings, Alpha Vantage). Used by the monthly dividend map and the dividend calendar; refreshed with **Actualizar datas** on the Dividends page. |
 
 API keys are **not** part of `config`. They live in the browser and go into the file only in the optional `secrets` section below.
 
@@ -196,6 +199,8 @@ Same shape as `claudiaInvestimentos`, owner **Carlitos**. Shown as its own "Carl
 
 An object keyed by ticker, or `null` (`KO`, `NN.AS`, `IBE.MC` …). The only enforced rule is that each thesis is an object, so a missing section simply doesn't render. Use the template below to keep every thesis consistent.
 
+**Only the fields in the template below are used.** The app ignores anything else, so don't add extra sections (e.g. SWOT, bull case, valuation models, charts): they make the file bigger without showing anywhere.
+
 Currently written: JPM, PEP, PG, MAIN, O, KO, XOM, TROW, COR.LS, DG.PA, NOV.DE, MCD, JNJ, VICI, MO, WM, NN.AS, BTI, AD.AS, IBE.MC, LGEN.
 
 ### Template (based on KO)
@@ -221,13 +226,10 @@ Currently written: JPM, PEP, PG, MAIN, O, KO, XOM, TROW, COR.LS, DG.PA, NOV.DE, 
   "financialsYears": ["2023", "2024", "2025"],
   "financials": [ { "metric": "Revenue", "values": ["$45,75B", "$46,50B", "$47,20B"] } ],   // one value per year
   "balanceSheet": "text",
-  "dividendThesisText": "text",
-  "dividendThesis": [ { "label": "Dividend yield", "value": "~2,4%" } ],
   "growthThesis": "text",
   "bearCase": ["…"],
   "whatWouldBreakThesis": ["…"],
   "valuation": [ { "scenario": "Bear|Base|Bull", "eps": "$2,70", "pe": "22x", "fairValue": "$59" } ],
-  "decisionRanges": [ { "price": "< $65", "decision": "Strong Buy" } ],
   "scorecardTotal": "84 / 100",
   "scorecard": [ { "metric": "Payout Ratio", "score": "10 / 12" } ],     // 12 metrics; the maxima add up to 100
   "finalDecision": { "rating": "BUY / HOLD", "fairValue": "~$94", "dividendYield": "2,41%", "epsGrowth": "4–6%", "divGrowth": "4–6%", "totalReturn": "…" },
@@ -244,7 +246,7 @@ Currently written: JPM, PEP, PG, MAIN, O, KO, XOM, TROW, COR.LS, DG.PA, NOV.DE, 
 }
 ```
 
-Section order on the Teses page: 1 Tese · 2 Negócio · 3 Moat · 4 Principal Risco · 5 Resposta Estratégica · 6 Financial Quality · 7 Balance Sheet · 8 Dividend Thesis · 9 Growth Thesis · 10 Bear Case · 11 O Que Destruiria a Tese · 12 Valuation · 13 Faixas de Decisão · 14 Scorecard · 15 Decisão Final. The Factores, Sinais, Qualidade do Dividendo and Fundamentais blocks above them come from `quality`, not from the thesis.
+Section order on the Teses page: 1 Tese · 2 Negócio · 3 Moat · 4 Principal Risco · 5 Resposta Estratégica · 6 Financial Quality · 7 Balance Sheet · 8 Growth Thesis · 9 Bear Case · 10 O Que Destruiria a Tese · 11 Valuation · 12 Decisão Final. The `scorecard` (with `scorecardTotal`) is shown inside the **Fundamentais & Scorecard** card near the top, each score coloured by its share of the maximum (≥80% green, ≥60% blue, ≥40% yellow, ≥20% orange, below red). The Factores, Sinais, Qualidade do Dividendo and Fundamentais blocks above them come from `quality`, not from the thesis.
 
 Conventions used so far:
 - Text is in European Portuguese. Numbers in strings use a decimal comma (`$2,12`, `2,41%`). Numeric fields (`price`, `yield`, `history`) use JSON numbers with a decimal point.

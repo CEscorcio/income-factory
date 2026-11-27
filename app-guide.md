@@ -38,7 +38,7 @@ Tax rate depends on how long **each lot** was held (CIRS Art. 43º reduction):
 | ≥ 8 years | 19.6% |
 
 - Only lots with a **gain** are taxed, at the rate for their own holding period. Lot losses are not netted inside a sale.
-- USD positions are converted to EUR with `cfg.fxEurUsd`.
+- USD amounts are converted to EUR with the ECB rate of their own date (`cfg.fxHistory`): sale proceeds at the sale date, each lot's cost at its purchase date, so currency gains and losses are part of the result. Dividends use the average rate of their year. Without history, `cfg.fxEurUsd` is used.
 - The Capital Gains table lists each sale with its FIFO lots (columns: date, ticker, shares, prices, proceeds, cost, fee, P&L). It no longer shows Taxa/Imposto columns.
 - **Tax Harvesting** is a quick estimate: realised gains minus realised losses per year. Positive net is taxed at a flat 28% (`net × 0.28`). It is marked "Equilibrado" when the net is within 10% of total gains.
 - **Menos-valias** (realised losses) offset gains of the same year.
@@ -108,6 +108,12 @@ One chart per currency (USD; EUR + ETF), from 2023 to the current year, includin
 - **Current year**: solid part = received so far; hatched part = rest of the year's estimate (`dy × shares × price` per position).
 - **Rendimento por Posição table**: *Est. current year* = `dy × shares × price` per position; *Est. next year* = that × (1 + `cfg.divGrowth`). The totals match the bars.
 - **Next year (prev.)**: hatched bar = current-year estimate × (1 + `cfg.divGrowth`), the same formula as "Est. next year" in the income table. The % above it is that growth rate.
+
+### 2.6c Monthly dividend map (Dividends page)
+Rows per year in EUR (USD at the month's average ECB rate), plus a projection row for next year.
+- **Past months:** each year's recorded dividends (`divByYear`) spread over the months they were paid: by real payment dates × shares held at the ex-date (Alpha Vantage, US listings), otherwise evenly over `divMonths`.
+- **Projection (blue, dashed):** rest of the current year = declared payments × current shares, else yield × shares × price ÷ payments per year on the usual months; next year = the same × (1 + `cfg.divGrowth`).
+- Clicking rows in *Rendimento por Posição* filters the map to those tickers.
 
 ### 2.7 DRIP (Dividends page)
 For each active position: `estimated annual dividend = dy × shares × price`; `DRIP units = dividend ÷ price`. The progress bar shows the fractional part (progress toward the next whole share).

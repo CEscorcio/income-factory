@@ -27,6 +27,7 @@ Income Factory: a personal dividend-portfolio PWA, published from `master` by Gi
 - **Interface text is European Portuguese** in the spelling the app already uses (`actual`, `acções`, `transacções`, `cotações`). Code comments and docs are English.
 - **Money logic needs care.** Prices are per share in the position's currency (`cat`: `USD` → USD, `EUR`/`ETF` → EUR). London quotes come in pence (`GBp`/`GBX`); `convertPrice` divides by 100. Never apply a price without the review step in `PricePanel`.
 - **Commit messages** are in Portuguese, short imperative subject, body listing what changed.
+- **Merging into `master`**: always a merge commit with a written message: a Portuguese title summarising the PR, and a body grouping the changes by area (e.g. Dividends, Config, Dados) and ending with the release number.
 
 ## Testing
 
