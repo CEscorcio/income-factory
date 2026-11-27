@@ -196,6 +196,8 @@ Same shape as `claudiaInvestimentos`, owner **Carlitos**. Shown as its own "Carl
 
 An object keyed by ticker, or `null` (`KO`, `NN.AS`, `IBE.MC` …). The only enforced rule is that each thesis is an object, so a missing section simply doesn't render. Use the template below to keep every thesis consistent.
 
+**Only the fields in the template below are used.** The app ignores anything else, so don't add extra sections (e.g. SWOT, bull case, valuation models, charts): they make the file bigger without showing anywhere.
+
 Currently written: JPM, PEP, PG, MAIN, O, KO, XOM, TROW, COR.LS, DG.PA, NOV.DE, MCD, JNJ, VICI, MO, WM, NN.AS, BTI, AD.AS, IBE.MC, LGEN.
 
 ### Template (based on KO)

@@ -26,7 +26,7 @@ The page renders, in order:
 
 The `scorecard` is not a numbered section: it is shown inside the "Fundamentais & Scorecard" card, next to the metrics from `quality`.
 
-A missing section simply doesn't render, so leave out what you can't support rather than padding it.
+A missing section simply doesn't render, so leave out what you can't support rather than padding it. Write only the fields of the template: the app ignores any other field, so extras are dead weight in the user's file.
 
 ## Conventions
 
