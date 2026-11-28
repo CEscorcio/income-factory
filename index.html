@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.44';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.45';</script>
 <meta name="theme-color" content="#0a0a0b">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2436,8 +2436,9 @@ function PatrimonioPage({wealth,pos,cfg}){
     h(Shdr,{title:'PPR'}),
     h('div',{className:'card-table mb-2 overflow-x-auto'},
       h('table',null,
-        TH('Produto','Contribuição','Ganhos Brutos','Retorno %','Owner'),
+        TH('Owner','Produto','Contribuição','Ganhos Brutos','Retorno %'),
         h('tbody',null,...pprFiltered.map((r,i)=>h('tr',{key:i},
+          h('td',null,ownerBadge(r.owner)),
           h('td',null,r.produto),
           h('td',{className:'font-mono'},fm(r.valorInvestido)),
           h('td',{style:{color:r.ganhosBrutos==null?'var(--muted)':r.ganhosBrutos>=0?'var(--green)':'var(--red)'}},
@@ -2445,17 +2446,16 @@ function PatrimonioPage({wealth,pos,cfg}){
           h('td',{style:{color:r.ganhosBrutos==null||!r.valorInvestido?'var(--muted)':r.ganhosBrutos>=0?'var(--green)':'var(--red)',fontWeight:600}},
             (r.ganhosBrutos!=null&&r.valorInvestido)
               ?(r.ganhosBrutos>0?'+':'')+((r.ganhosBrutos/r.valorInvestido)*100).toFixed(2)+'%'
-              :'—'),
-          h('td',null,ownerBadge(r.owner))
+              :'—')
         ))),
         h('tfoot',null,h('tr',{className:'tfoot-total'},
           h('td',{className:'text-muted font-semibold'},'TOTAL'),
+          h('td'),
           h('td',null,fm(pprInvested)),
           h('td',{style:{color:pprGains>=0?'var(--green)':'var(--red)',fontWeight:700}},
             pprGains>=0?'+'+fm(pprGains):fm(pprGains)),
           h('td',{style:{color:pprGains>=0?'var(--green)':'var(--red)',fontWeight:700}},
-            pprInvested>0?(pprGains>=0?'+':'')+((pprGains/pprInvested)*100).toFixed(2)+'%':'—'),
-          h('td')
+            pprInvested>0?(pprGains>=0?'+':'')+((pprGains/pprInvested)*100).toFixed(2)+'%':'—')
         ))
       )
     ),
@@ -2505,9 +2505,9 @@ function PatrimonioPage({wealth,pos,cfg}){
           (()=>{
             const years=['2026','2025','2024','2023'].filter(y=>jurosFiltered.some(r=>r[y]!=null));
             return h('thead',null,h('tr',null,
+              h('th',null,'Investidor'),
               h('th',null,'Plataforma'),
               h('th',null,'Return %'),
-              h('th',null,'Investidor'),
               h('th',null,'Valor'),
               ...years.map(y=>h('th',{key:y},y)),
               h('th',null,'Total')
@@ -2518,10 +2518,10 @@ function PatrimonioPage({wealth,pos,cfg}){
             const total=years.reduce((s,y)=>s+(r[y]||0),0);
             const retPct=r.valor>0?(total/r.valor*100):null;
             return h('tr',{key:i},
+              h('td',null,ownerBadge(r.investidor)),
               h('td',{className:'font-semibold'},r.plataforma),
               h('td',{style:{color:retPct==null?'var(--muted)':retPct>=0?'var(--green)':'var(--red)',fontWeight:600}},
                 retPct!=null?(retPct>=0?'+':'')+retPct.toFixed(2)+'%':'—'),
-              h('td',null,ownerBadge(r.investidor)),
               h('td',null,r.valor!=null?'€'+r.valor.toLocaleString('pt-PT',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'),
               ...years.map(y=>h('td',{key:y,style:{fontSize:13}},
                 r[y]!=null?'€'+r[y].toLocaleString('pt-PT',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'
@@ -2532,6 +2532,7 @@ function PatrimonioPage({wealth,pos,cfg}){
           })),
           h('tfoot',null,h('tr',{className:'tfoot-total'},
             h('td',{className:'text-muted font-semibold'},'TOTAL'),
+            h('td'),
             (()=>{
               const totalValor=jurosFiltered.reduce((s,r)=>s+(r.valor||0),0);
               const years0=['2026','2025','2024','2023'].filter(y=>jurosFiltered.some(r=>r[y]!=null));
@@ -2540,7 +2541,6 @@ function PatrimonioPage({wealth,pos,cfg}){
               return h('td',{style:{color:retPct==null?'var(--muted)':retPct>=0?'var(--green)':'var(--red)',fontWeight:700}},
                 retPct!=null?(retPct>=0?'+':'')+retPct.toFixed(2)+'%':'—');
             })(),
-            h('td'),
             h('td',{className:'font-bold text-[var(--gold)]'},
               '€'+(jurosFiltered.reduce((s,r)=>s+(r.valor||0),0)).toLocaleString('pt-PT',{minimumFractionDigits:2,maximumFractionDigits:2})),
             ...(()=>{
@@ -2606,14 +2606,14 @@ function PatrimonioPage({wealth,pos,cfg}){
       h(Shdr,{title:'Carlos Investimentos'}),
       h('div',{className:'card-table overflow-x-auto'},
         h('table',null,
-          TH('Tipo','Owner','Posições','Investido','Valor Atual','P&L €','P&L %','% Portfolio'),
+          TH('Owner','Tipo','Posições','Investido','Valor Atual','P&L €','P&L %','% Portfolio'),
           h('tbody',null,portLines.filter(l=>l.count>0).map(l=>{
             const pl=l.val-l.cost;
             const plCol=pl>=0?'var(--green)':'var(--red)';
             return h('tr',{key:l.key},
+              h('td',null,ownerBadge('Carlos')),
               h('td',{className:'font-semibold'},
                 h('span',{style:{display:'inline-block',width:8,height:8,borderRadius:'50%',background:l.color,marginRight:7}}),l.label),
-              h('td',null,ownerBadge('Carlos')),
               h('td',{className:'mono-sm-muted'},l.count),
               h('td',{className:'font-mono'},fm(l.cost)),
               h('td',{className:'font-mono font-bold'},fm(l.val)),
