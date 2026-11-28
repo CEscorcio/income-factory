@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.5';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.6';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2058,12 +2058,6 @@ async function fetchDividendEvents(symbol,key){
     .filter(e=>e.ex&&e.ex>=DIV_EVENTS_SINCE&&Number.isFinite(e.amount)&&e.amount>0)
     .sort((a,b)=>a.ex.localeCompare(b.ex));
 }
-// Shares held at the start of `date` (bought before it, minus sells before it).
-function sharesHeldBefore(p,date){
-  const txs=p.transactions||[];
-  if(!txs.length)return p.n||0;
-  return Math.max(0,txs.filter(t=>t.date<date).reduce((s,t)=>s+(t.type==='buy'?t.n:-t.n),0));
-}
 const payDate=e=>e.pay||e.ex;
 // Payment months seen in the 12 months up to `date`, from the events (or divMonths).
 function paymentMonthsFor(p,events,date){
@@ -2074,88 +2068,18 @@ function paymentMonthsFor(p,events,date){
   }
   return[...new Set((p.divMonths||[]).filter(m=>Number.isInteger(m)&&m>=1&&m<=12))].sort((a,b)=>a-b);
 }
-// Monthly dividend map in EUR, one row per year from `startYear`, plus next year's projection.
-// Past months: the dividends recorded per year (divByYear) spread over the months they were
-// paid — by real payment dates (shares held × amount) when known, else over divMonths.
-// Future months: estimate = yield × shares × price, on declared or usual payment months.
-function buildDividendMonthMap({pos,sold,qualMap,cfg,growth,startYear,only}){
-  const fxL=makeFxLookup(cfg);
-  const evMap=cfg?.dividendEvents||{};
-  const today=new Date().toISOString().slice(0,10);
-  const curMonth=parseInt(today.slice(5,7));
-  const years=[];for(let y=startYear;y<=CUR_YEAR+1;y++)years.push(y);
-  const grid=Object.fromEntries(years.map(y=>[y,Array.from({length:12},()=>({eur:0,projected:false,items:{}}))]));
-  const noDates=new Set();
-  const add=(y,m,t,eur,projected)=>{
-    if(!(eur>0)||!grid[y])return;
-    const c=grid[y][m-1];c.eur+=eur;c.items[t]=(c.items[t]||0)+eur;if(projected)c.projected=true;
-  };
-  const all=[...(pos||[]).map(p=>({p,active:(p.n==null||p.n>0)})),...(sold||[]).map(p=>({p,active:false}))]
-    .filter(x=>!only||only.has(x.p.t));
-  all.forEach(({p,active})=>{
-    const isUSD=p.cat==='USD';
-    const events=evMap[p.t]?.events||null;
-    const toEurOn=(v,ym)=>isUSD?v/fxL.avg(ym):v;
-    // Recorded dividends, spread over the months they were paid.
-    years.filter(y=>y<=CUR_YEAR).forEach(y=>{
-      const total=p.divByYear?.[y]||p.divByYear?.[String(y)]||0;
-      if(!(total>0))return;
-      const lastMonth=y===CUR_YEAR?curMonth:12;
-      const w=Array(13).fill(0);
-      (events||[]).forEach(e=>{
-        const d=payDate(e);
-        if(!d.startsWith(String(y))||d>today)return;
-        const m=parseInt(d.slice(5,7));if(m>lastMonth)return;
-        w[m]+=sharesHeldBefore(p,e.ex)*e.amount;
-      });
-      let sum=w.reduce((a,b)=>a+b,0);
-      if(!(sum>0)){
-        const ms=(p.divMonths||[]).filter(m=>Number.isInteger(m)&&m>=1&&m<=lastMonth);
-        if(ms.length)ms.forEach(m=>{w[m]=1;});else{noDates.add(p.t);for(let m=1;m<=lastMonth;m++)w[m]=1;}
-        sum=w.reduce((a,b)=>a+b,0);
-      }
-      for(let m=1;m<=12;m++)if(w[m]>0)add(y,m,p.t,toEurOn(total*w[m]/sum,y+'-'+String(m).padStart(2,'0')),false);
-    });
-    if(!active)return;
-    const est=positionEstAnnual(p,qualMap);
-    if(!est)return;
-    const fxNow=isUSD?(cfg?.fxEurUsd||1.08):1;
-    const months=paymentMonthsFor(p,events,today);
-    if(!months.length){noDates.add(p.t);return;}
-    const perPayment=est/months.length;
-    // Rest of this year: declared payments (amount × shares now), else the usual months.
-    const declared=(events||[]).filter(e=>payDate(e)>today&&payDate(e).startsWith(String(CUR_YEAR)));
-    const declaredMonths=new Set(declared.map(e=>parseInt(payDate(e).slice(5,7))));
-    declared.forEach(e=>add(CUR_YEAR,parseInt(payDate(e).slice(5,7)),p.t,e.amount*(p.n||0)/fxNow,true));
-    months.filter(m=>m>curMonth&&!declaredMonths.has(m)).forEach(m=>add(CUR_YEAR,m,p.t,perPayment/fxNow,true));
-    // Next year: the annual estimate grown by divGrowth, on the usual months.
-    months.forEach(m=>add(CUR_YEAR+1,m,p.t,perPayment*growth/fxNow,true));
-  });
-  const rows=years.map(y=>{
-    const cells=grid[y].map(c=>({...c,items:Object.entries(c.items).sort((a,b)=>b[1]-a[1])}));
-    return{year:y,cells,total:cells.reduce((s,c)=>s+c.eur,0),kind:y>CUR_YEAR?'projection':y===CUR_YEAR?'current':'actual'};
-  });
-  const maxActual=Math.max(1,...rows.flatMap(r=>r.cells.filter(c=>!c.projected).map(c=>c.eur)));
-  const maxProj=Math.max(1,...rows.flatMap(r=>r.cells.filter(c=>c.projected).map(c=>c.eur)));
-  return{rows,maxActual,maxProj,noDates:[...noDates].sort()};
-}
-const MONTHS_PT=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-function DividendHeatmap({pos,sold,qualMap,cfg,setCfg,growth,selected,clearSelected}){
-  const firstYear=Math.min(CUR_YEAR,...[...(pos||[]),...(sold||[])].flatMap(p=>Object.keys(p.divByYear||{}).map(Number)).filter(Number.isFinite));
-  const[startYear,setStartYear]=useState(Math.max(firstYear,CUR_YEAR-3));
+// "Actualizar datas": real dividend dates and amounts per share for the active US
+// positions (Alpha Vantage), stored in cfg.dividendEvents and used by the dividend calendar.
+function DividendDatesButton({pos,cfg,setCfg}){
   const[status,setStatus]=useState(null);
   const cancel=useRef(false);
   useEffect(()=>()=>{cancel.current=true;},[]);
-  const only=selected&&selected.size?selected:null;
-  const map=useMemo(()=>buildDividendMonthMap({pos,sold,qualMap,cfg,growth,startYear,only}),[pos,sold,qualMap,cfg,growth,startYear,only]);
-  // US tickers (active, then sold with dividends) whose dates are missing or stale.
+  // Active US tickers whose dates are missing or older than 30 days.
   const toFetch=()=>{
     const today=new Date();
-    const stale=(t,days)=>{const f=cfg?.dividendEvents?.[t]?.fetchedAt;return!f||(today-new Date(f))/86400000>days;};
+    const stale=t=>{const f=cfg?.dividendEvents?.[t]?.fetchedAt;return!f||(today-new Date(f))/86400000>30;};
     const isUS=p=>p.cat==='USD'&&parsePriceSymbol((cfg?.priceSymbols||{})[p.t]||defaultPriceSymbol(p)).code==='US';
-    const act=(pos||[]).filter(p=>(p.n==null||p.n>0)&&isUS(p)&&stale(p.t,30)).map(p=>p.t);
-    const old=(sold||[]).filter(p=>isUS(p)&&Object.keys(p.divByYear||{}).some(y=>+y>=startYear)&&stale(p.t,180)).map(p=>p.t);
-    return[...new Set([...act,...old])];
+    return[...new Set((pos||[]).filter(p=>(p.n==null||p.n>0)&&isUS(p)&&stale(p.t)).map(p=>p.t))];
   };
   const refresh=async()=>{
     const key=readPriceKey('alphavantage');
@@ -2179,66 +2103,10 @@ function DividendHeatmap({pos,sold,qualMap,cfg,setCfg,growth,selected,clearSelec
       (left>0?(limited?` Faltam ${left}: o Alpha Vantage atingiu o limite diário, tenta amanhã.`:` Faltam ${left}: carrega outra vez (máx. 20 por vez; o plano grátis permite 25 pedidos por dia).`):'')+
       (errorMsg&&!limited?' '+errorMsg:'')});
   };
-  const eur=v=>'€'+(v>=100?Math.round(v).toLocaleString('pt-PT'):fn(v,0));
-  const shade=(v,max,proj)=>{
-    const r=Math.min(1,v/max),steps=[.18,.32,.48,.66,.85,1];
-    const a=steps[Math.min(5,Math.floor(r*6))];
-    return proj?`rgba(59,130,246,${a*0.75})`:`rgba(16,185,129,${a*0.7})`;
-  };
-  const yearOpts=[];for(let y=firstYear;y<=CUR_YEAR;y++)yearOpts.push(y);
-  const cellStyle={height:22,borderRadius:4,fontSize:10,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'var(--mono)'};
-  const legend=(max,proj)=>h('span',{style:{display:'inline-flex',alignItems:'center',gap:3}},
-    '€0',[.1,.3,.5,.7,.9,1].map(r=>h('span',{key:r,style:{width:12,height:8,borderRadius:2,background:shade(r*max,max,proj),border:proj?'1px dashed rgba(96,165,250,.7)':'none'}})),
-    '+'+eur(max));
-  const evCount=Object.keys(cfg?.dividendEvents||{}).length;
-  return h('div',{className:'card mb-4'},
-    h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10,marginBottom:10}},
-      h('div',{style:{display:'flex',alignItems:'center',gap:8}},
-        h('span',{className:'font-bold text-[13px] tracking-[.06em] uppercase text-slate-200'},'Mapa de rendimento: dividendos por mês'),
-        h(InfoTooltip,{text:'Dividendos recebidos por mês, em euros (USD ao câmbio médio do BCE do mês). O total de cada ano é o que registaste; a distribuição pelos meses usa as datas reais de pagamento (Alpha Vantage, acções dos EUA) ou os meses de pagamento da posição. A azul: projecção (yield × posições × preço; '+(CUR_YEAR+1)+' com o crescimento do dividendo de Config).'})
-      ),
-      h('div',{style:{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}},
-        h('button',{className:'btn-secondary ml-0',style:{fontSize:10,padding:'5px 10px'},disabled:status&&status.loading,onClick:refresh,
-          title:'Datas de pagamento e valores por acção das acções dos EUA (até 20 tickers por vez)'},status&&status.loading?'…':'Actualizar datas'),
-        h('span',{style:{fontSize:10,fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--muted)'}},'Ver a partir de'),
-        h('select',{className:'ed',value:startYear,onChange:e=>setStartYear(+e.target.value),style:{fontSize:12,fontWeight:700}},
-          yearOpts.map(y=>h('option',{key:y,value:y},y)))
-      )
-    ),
-    status&&h('div',{style:{fontSize:10,color:status.error?'var(--red)':'var(--muted)',marginBottom:8}},status.text),
-    only&&h('div',{style:{fontSize:10,color:'var(--muted)',marginBottom:8}},'Filtro: ',
-      h('span',{style:{color:'var(--text)',fontWeight:700}},[...only].join(', ')),' · ',
-      h('span',{style:{color:'var(--blue)',cursor:'pointer',textDecoration:'underline'},onClick:clearSelected},'limpar')),
-    h('div',{style:{overflowX:'auto'}},
-      h('div',{style:{display:'grid',gridTemplateColumns:'44px repeat(12,minmax(48px,1fr)) 86px',gap:3,minWidth:760}},
-        h('div'),MONTHS_PT.map(m=>h('div',{key:m,style:{fontSize:10,color:'var(--muted)',textAlign:'center',paddingBottom:4}},m)),
-        h('div',{style:{fontSize:10,color:'var(--muted)',textAlign:'right',paddingBottom:4}},'Total'),
-        ...map.rows.flatMap(row=>{
-          const lblCol=row.kind==='projection'?'var(--blue)':row.kind==='current'?'var(--text)':'var(--muted)';
-          return[
-            h('div',{key:row.year+'l',style:{fontSize:11,fontWeight:row.kind==='actual'?500:700,color:lblCol,display:'flex',alignItems:'center'}},row.year),
-            ...row.cells.map((c,i)=>{
-              const max=c.projected?map.maxProj:map.maxActual;
-              const tip=MONTHS_PT[i]+' '+row.year+' · '+(c.eur>0?eur(c.eur):'sem dividendos')+(c.projected?' (projecção)':'')+
-                (c.items.length?'\n'+c.items.slice(0,8).map(([t,v])=>t+' '+eur(v)).join(' · ')+(c.items.length>8?' …':''):'');
-              return h('div',{key:row.year+'-'+i,title:tip,style:{...cellStyle,
-                background:c.eur>0?shade(c.eur,max,c.projected):'var(--s2)',
-                border:c.projected?'1px dashed rgba(96,165,250,.7)':'1px solid var(--border)',
-                color:c.eur>0?'#e6edf3':'transparent'}},c.eur>0?eur(c.eur):'·');
-            }),
-            h('div',{key:row.year+'t',style:{fontSize:11,fontWeight:700,textAlign:'right',display:'flex',alignItems:'center',justifyContent:'flex-end',
-              color:row.kind==='projection'?'var(--blue)':row.kind==='current'?'var(--text)':'var(--green)'}},(row.kind==='current'?'':'+')+eur(row.total))
-          ];
-        })
-      )
-    ),
-    h('div',{style:{display:'flex',justifyContent:'space-between',flexWrap:'wrap',gap:8,marginTop:10,fontSize:10,color:'var(--muted)'}},
-      h('div',{style:{display:'flex',gap:14,flexWrap:'wrap'}},legend(map.maxActual,false),h('span',{style:{color:'var(--blue)'}},'projecção'),legend(map.maxProj,true)),
-      h('div',null,'passa o cursor sobre os meses · selecciona linhas em "Rendimento por Posição" para filtrar'+(evCount?' · datas reais: '+evCount+' tickers':''))
-    ),
-    map.noDates.length>0&&h('div',{style:{fontSize:9,color:'var(--muted)',marginTop:6}},
-      'Sem datas nem meses de pagamento (distribuído por igual): '+map.noDates.join(', '))
-  );
+  return h('div',{style:{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',margin:'4px 0 10px'}},
+    h('button',{className:'btn-secondary ml-0',style:{fontSize:10,padding:'5px 10px'},disabled:status&&status.loading,onClick:refresh,
+      title:'Datas de pagamento e valores por acção das acções dos EUA (Alpha Vantage, até 20 tickers por vez)'},status&&status.loading?'…':'Actualizar datas'),
+    status&&h('span',{style:{fontSize:10,color:status.error?'var(--red)':'var(--muted)'}},status.text));
 }
 
 // ── Certificados de Aforro: maturidade (anos após a constituição) por série ──
@@ -8438,7 +8306,7 @@ function positionEstAnnual(p,qualMap){
   const dy=getQual(qualMap,p.t)?.dy||0;
   return dy>0&&p.n>0&&p.cv>0?dy*p.n*p.cv:null;
 }
-function IncRow({p,sm,qualMap,income,DISP_YEARS,GROWTH,selected,onToggle}){
+function IncRow({p,sm,qualMap,income,DISP_YEARS,GROWTH}){
   // Est. this year = yield × shares × price; Est. next year = that × (1 + divGrowth)
   const est=positionEstAnnual(p,qualMap);
   const estNext=est!=null?est*GROWTH:null;
@@ -8446,9 +8314,7 @@ function IncRow({p,sm,qualMap,income,DISP_YEARS,GROWTH,selected,onToggle}){
   const total=getIncome(income,p.t);
   const hasAny=total>0||est;
   if(!hasAny)return null;
-  const isSel=selected&&selected.has(p.t);
-  return h('tr',{key:p.t,...(onToggle?pressable(()=>onToggle(p.t)):{}),title:onToggle?'Clica para filtrar o mapa de rendimento':undefined,
-    style:{cursor:onToggle?'pointer':undefined,background:isSel?'rgba(59,130,246,.14)':undefined,boxShadow:isSel?'inset 3px 0 0 var(--blue)':undefined}},
+  return h('tr',{key:p.t},
     h('td',null,h(TickerLink,{t:p.t,className:'font-semibold'}),
       p._closed&&h('span',{style:{fontSize:9,color:'var(--muted)',marginLeft:6,padding:'1px 5px',border:'1px solid var(--border)',borderRadius:4}},'vendida')),
     h('td',{className:'mono-sm-italic'},
@@ -8465,7 +8331,7 @@ function IncRow({p,sm,qualMap,income,DISP_YEARS,GROWTH,selected,onToggle}){
 }
 // Renders one currency-group section (USD/EUR+ETF) of the "Rendimento por
 // Posição" table. Hoisted to top level for the same reason as IncRow above.
-function GroupSection({grp,sm,label,headerBg,labelColor,qualMap,income,DISP_YEARS,GROWTH,sortField,sortDir,sortVal,selected,onToggle}){
+function GroupSection({grp,sm,label,headerBg,labelColor,qualMap,income,DISP_YEARS,GROWTH,sortField,sortDir,sortVal}){
   const sortedGrp=useMemo(()=>{
     if(!sortField||!sortVal)return grp;
     const withVal=grp.map(p=>({p,v:sortVal(p,sortField)}));
@@ -8475,7 +8341,7 @@ function GroupSection({grp,sm,label,headerBg,labelColor,qualMap,income,DISP_YEAR
     });
     return withVal.map(x=>x.p);
   },[grp,sortField,sortDir,sortVal]);
-  const rows=sortedGrp.map(p=>h(IncRow,{key:p.t,p,sm,qualMap,income,DISP_YEARS,GROWTH,selected,onToggle})).filter(Boolean);
+  const rows=sortedGrp.map(p=>h(IncRow,{key:p.t,p,sm,qualMap,income,DISP_YEARS,GROWTH})).filter(Boolean);
   if(!rows.length)return null;
   const totals=Object.fromEntries(DISP_YEARS.map(y=>[y,grp.reduce((s,p)=>s+getIncomeYear(income,p.t,y),0)]));
   const grandTotal=grp.reduce((s,p)=>s+getIncome(income,p.t),0);
@@ -8612,8 +8478,6 @@ function DecelerationCard({pos,qualMap}){
 }
 
 function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
-  const[selTickers,setSelTickers]=useState(()=>new Set());
-  const toggleTicker=t=>setSelTickers(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});
   const[incTab,setIncTab]=useState('posicoes');
   const[incSortField,setIncSortField]=useState('total');
   const[incSortDir,setIncSortDir]=useState('desc');
@@ -8794,7 +8658,6 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
     })(),
 
     /* ── Mapa de rendimento: dividendos por mês ── */
-    h(DividendHeatmap,{pos,sold,qualMap,cfg,setCfg,growth:GROWTH,selected:selTickers,clearSelected:()=>setSelTickers(new Set())}),
 
     /* ── Row 2: Yield & Estimated Dividend Pies — 2 cols ── */
     h('div',{className:'grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4'},
@@ -8887,8 +8750,8 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
               ...DISP_YEARS.map(y=>thSort(y,y,{color:y===CUR_YEAR?'var(--gold)':'inherit'})),
               thSort('total','Total'),
             )),
-            h(GroupSection,{selected:selTickers,onToggle:toggleTicker,grp:grpUSD,sm:'$',label:'Acções USD',headerBg:'#0f1e3a',labelColor:'var(--blue)',qualMap,income,DISP_YEARS,GROWTH,sortField:incSortField,sortDir:incSortDir,sortVal}),
-            h(GroupSection,{selected:selTickers,onToggle:toggleTicker,grp:grpEUR,sm:'€',label:'Acções EUR + ETFs',headerBg:'#0a1f16',labelColor:'var(--green)',qualMap,income,DISP_YEARS,GROWTH,sortField:incSortField,sortDir:incSortDir,sortVal}),
+            h(GroupSection,{grp:grpUSD,sm:'$',label:'Acções USD',headerBg:'#0f1e3a',labelColor:'var(--blue)',qualMap,income,DISP_YEARS,GROWTH,sortField:incSortField,sortDir:incSortDir,sortVal}),
+            h(GroupSection,{grp:grpEUR,sm:'€',label:'Acções EUR + ETFs',headerBg:'#0a1f16',labelColor:'var(--green)',qualMap,income,DISP_YEARS,GROWTH,sortField:incSortField,sortDir:incSortDir,sortVal}),
           )
         )
       );
@@ -9009,6 +8872,7 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
       const averageMonth=calendar.annualEUR/12;
       return h('div',{className:'card split-8'},
         h(Shdr,{title:'Calendário de Dividendos',hint:'Projeção anual distribuída pelos meses de pagamento'}),
+        h(DividendDatesButton,{pos,cfg,setCfg}),
         calendar.annualEUR<=0
           ? h('div',{style:{padding:'16px 0',textAlign:'center',color:'var(--muted)',fontSize:12}},
               'Sem projeção disponível. Preenche o Yield % e os meses de pagamento das posições.')

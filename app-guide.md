@@ -109,12 +109,6 @@ One chart per currency (USD; EUR + ETF), from 2023 to the current year, includin
 - **Rendimento por Posição table**: *Est. current year* = `dy × shares × price` per position; *Est. next year* = that × (1 + `cfg.divGrowth`). The totals match the bars.
 - **Next year (prev.)**: hatched bar = current-year estimate × (1 + `cfg.divGrowth`), the same formula as "Est. next year" in the income table. The % above it is that growth rate.
 
-### 2.6c Monthly dividend map (Dividends page)
-Rows per year in EUR (USD at the month's average ECB rate), plus a projection row for next year.
-- **Past months:** each year's recorded dividends (`divByYear`) spread over the months they were paid: by real payment dates × shares held at the ex-date (Alpha Vantage, US listings), otherwise evenly over `divMonths`.
-- **Projection (blue, dashed):** rest of the current year = declared payments × current shares, else yield × shares × price ÷ payments per year on the usual months; next year = the same × (1 + `cfg.divGrowth`).
-- Clicking rows in *Rendimento por Posição* filters the map to those tickers.
-
 ### 2.7 DRIP (Dividends page)
 For each active position: `estimated annual dividend = dy × shares × price`; `DRIP units = dividend ÷ price`. The progress bar shows the fractional part (progress toward the next whole share).
 
