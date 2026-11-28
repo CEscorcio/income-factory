@@ -124,7 +124,7 @@ real(y)   = nominal(y) / (1+inflation)^y
 
 ## 3. Practical notes
 - **Quote refresh**: three ways to update prices (`cv`):
-  - **Cotações online** (Config): Twelve Data for US listings, Alpha Vantage as fallback for London, Xetra, Frankfurt, Amsterdam and Lisbon, and Finnhub (US listings) as the last fallback for anything still missing. Prices are converted to the position currency with ECB rates and reviewed before applying.
+  - **Cotações online** (Config): Twelve Data for US listings, Alpha Vantage as fallback for London, Xetra, Frankfurt, Amsterdam and Lisbon only (never for US listings, to save its 25 requests/day), and Finnhub (US listings) as the last fallback for anything still missing. Prices are converted to the position currency with ECB rates and reviewed before applying.
   - **Broker CSV** (Config): template download + import.
   - **By hand** in the Transactions page.
 - **Investments outside the portfolio** (`<owner>Investimentos` sections): their current price comes from an active position with the same ticker, otherwise from `cfg.refPrices`. Cotações online also fetches these tickers (marked "(ref.)") and stores the price there.

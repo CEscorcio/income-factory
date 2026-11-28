@@ -35,7 +35,7 @@ How each number is calculated: [`app-guide.md`](app-guide.md).
 |---|---|---|
 | ECB reference rates (via Frankfurter) | EUR/USD and other currencies | none |
 | Twelve Data (free plan) | US exchanges | free, 800 requests/day |
-| Alpha Vantage (free plan), used as fallback | US, London, Xetra, Frankfurt, Amsterdam, Lisbon | free, 25 requests/day |
+| Alpha Vantage (free plan), used as fallback for European listings only | London, Xetra, Frankfurt, Amsterdam, Lisbon | free, 25 requests/day |
 | Finnhub (free plan), last fallback | US exchanges | free, 60 requests/minute |
 | Broker CSV | anything | — |
 
