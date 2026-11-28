@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.35';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.48';</script>
 <meta name="theme-color" content="#0a0a0b">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -46,6 +46,7 @@
   --muted:#9a9aa3;--green:#10b981;--red:#f43f5e;--gold:#10b981;
   --blue:#2dd4bf;--orange:#10b981;--mono:'JetBrains Mono',monospace;
   --text:#f4f4f5;--accent:#10b981;--accent-ink:#04130d;
+  --proj:#a78bfa; /* projections (next-year estimate bars), distinct from actuals */
   /* Named aliases for the 4-tier quality-metric scale (red→tier-warn→tier-ok→green)
      used across ~60 spots (scoreColor, sc2col, py/eps/debt/fcf/revgr/opmar colors,
      legends). Same hex as before — this only gives them a name so future edits
@@ -330,6 +331,11 @@ a{color:var(--blue);text-decoration:none;}
    and let long labels break inside the button. */
 .page .flex:has(> .btn-primary.flex-1),.page .flex:has(> .btn-secondary.flex-1){flex-wrap:wrap;}
 .page .flex > .btn-primary.flex-1,.page .flex > .btn-secondary.flex-1{flex:1 1 140px;min-width:0;white-space:normal;line-height:1.25;}
+/* Config: Dados column 3/12, Sistema de Pontuação 9/12. */
+.conf-split{display:grid;gap:20px;grid-template-columns:minmax(0,1fr);}
+@media(min-width:768px){.conf-split{grid-template-columns:minmax(0,3fr) minmax(0,9fr);}}
+/* Donut cards (Analytics): body fills the card so donut and legend sit centred, not top-left. */
+.donut-card{display:flex;flex-direction:column;}
 /* Navigation centred on the page: logo left, tabs centre, save button right. */
 @media(min-width:641px){
   .bar{display:grid;grid-template-columns:1fr auto 1fr;}
@@ -2430,8 +2436,9 @@ function PatrimonioPage({wealth,pos,cfg}){
     h(Shdr,{title:'PPR'}),
     h('div',{className:'card-table mb-2 overflow-x-auto'},
       h('table',null,
-        TH('Produto','Contribuição','Ganhos Brutos','Retorno %','Owner'),
+        TH('Owner','Produto','Contribuição','Ganhos Brutos','Retorno %'),
         h('tbody',null,...pprFiltered.map((r,i)=>h('tr',{key:i},
+          h('td',null,ownerBadge(r.owner)),
           h('td',null,r.produto),
           h('td',{className:'font-mono'},fm(r.valorInvestido)),
           h('td',{style:{color:r.ganhosBrutos==null?'var(--muted)':r.ganhosBrutos>=0?'var(--green)':'var(--red)'}},
@@ -2439,17 +2446,16 @@ function PatrimonioPage({wealth,pos,cfg}){
           h('td',{style:{color:r.ganhosBrutos==null||!r.valorInvestido?'var(--muted)':r.ganhosBrutos>=0?'var(--green)':'var(--red)',fontWeight:600}},
             (r.ganhosBrutos!=null&&r.valorInvestido)
               ?(r.ganhosBrutos>0?'+':'')+((r.ganhosBrutos/r.valorInvestido)*100).toFixed(2)+'%'
-              :'—'),
-          h('td',null,ownerBadge(r.owner))
+              :'—')
         ))),
         h('tfoot',null,h('tr',{className:'tfoot-total'},
           h('td',{className:'text-muted font-semibold'},'TOTAL'),
+          h('td'),
           h('td',null,fm(pprInvested)),
           h('td',{style:{color:pprGains>=0?'var(--green)':'var(--red)',fontWeight:700}},
             pprGains>=0?'+'+fm(pprGains):fm(pprGains)),
           h('td',{style:{color:pprGains>=0?'var(--green)':'var(--red)',fontWeight:700}},
-            pprInvested>0?(pprGains>=0?'+':'')+((pprGains/pprInvested)*100).toFixed(2)+'%':'—'),
-          h('td')
+            pprInvested>0?(pprGains>=0?'+':'')+((pprGains/pprInvested)*100).toFixed(2)+'%':'—')
         ))
       )
     ),
@@ -2499,9 +2505,9 @@ function PatrimonioPage({wealth,pos,cfg}){
           (()=>{
             const years=['2026','2025','2024','2023'].filter(y=>jurosFiltered.some(r=>r[y]!=null));
             return h('thead',null,h('tr',null,
+              h('th',null,'Investidor'),
               h('th',null,'Plataforma'),
               h('th',null,'Return %'),
-              h('th',null,'Investidor'),
               h('th',null,'Valor'),
               ...years.map(y=>h('th',{key:y},y)),
               h('th',null,'Total')
@@ -2512,10 +2518,10 @@ function PatrimonioPage({wealth,pos,cfg}){
             const total=years.reduce((s,y)=>s+(r[y]||0),0);
             const retPct=r.valor>0?(total/r.valor*100):null;
             return h('tr',{key:i},
+              h('td',null,ownerBadge(r.investidor)),
               h('td',{className:'font-semibold'},r.plataforma),
               h('td',{style:{color:retPct==null?'var(--muted)':retPct>=0?'var(--green)':'var(--red)',fontWeight:600}},
                 retPct!=null?(retPct>=0?'+':'')+retPct.toFixed(2)+'%':'—'),
-              h('td',null,ownerBadge(r.investidor)),
               h('td',null,r.valor!=null?'€'+r.valor.toLocaleString('pt-PT',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'),
               ...years.map(y=>h('td',{key:y,style:{fontSize:13}},
                 r[y]!=null?'€'+r[y].toLocaleString('pt-PT',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'
@@ -2526,6 +2532,7 @@ function PatrimonioPage({wealth,pos,cfg}){
           })),
           h('tfoot',null,h('tr',{className:'tfoot-total'},
             h('td',{className:'text-muted font-semibold'},'TOTAL'),
+            h('td'),
             (()=>{
               const totalValor=jurosFiltered.reduce((s,r)=>s+(r.valor||0),0);
               const years0=['2026','2025','2024','2023'].filter(y=>jurosFiltered.some(r=>r[y]!=null));
@@ -2534,7 +2541,6 @@ function PatrimonioPage({wealth,pos,cfg}){
               return h('td',{style:{color:retPct==null?'var(--muted)':retPct>=0?'var(--green)':'var(--red)',fontWeight:700}},
                 retPct!=null?(retPct>=0?'+':'')+retPct.toFixed(2)+'%':'—');
             })(),
-            h('td'),
             h('td',{className:'font-bold text-[var(--gold)]'},
               '€'+(jurosFiltered.reduce((s,r)=>s+(r.valor||0),0)).toLocaleString('pt-PT',{minimumFractionDigits:2,maximumFractionDigits:2})),
             ...(()=>{
@@ -2600,14 +2606,14 @@ function PatrimonioPage({wealth,pos,cfg}){
       h(Shdr,{title:'Carlos Investimentos'}),
       h('div',{className:'card-table overflow-x-auto'},
         h('table',null,
-          TH('Tipo','Owner','Posições','Investido','Valor Atual','P&L €','P&L %','% Portfolio'),
+          TH('Owner','Tipo','Posições','Investido','Valor Atual','P&L €','P&L %','% Portfolio'),
           h('tbody',null,portLines.filter(l=>l.count>0).map(l=>{
             const pl=l.val-l.cost;
             const plCol=pl>=0?'var(--green)':'var(--red)';
             return h('tr',{key:l.key},
+              h('td',null,ownerBadge('Carlos')),
               h('td',{className:'font-semibold'},
                 h('span',{style:{display:'inline-block',width:8,height:8,borderRadius:'50%',background:l.color,marginRight:7}}),l.label),
-              h('td',null,ownerBadge('Carlos')),
               h('td',{className:'mono-sm-muted'},l.count),
               h('td',{className:'font-mono'},fm(l.cost)),
               h('td',{className:'font-mono font-bold'},fm(l.val)),
@@ -2627,8 +2633,7 @@ function PatrimonioPage({wealth,pos,cfg}){
             h('td',{className:'mono-sm-muted'},'100%')
           ))
         )
-      ),
-      h('div',{className:'text-[11px] text-[var(--muted)] mt-1'},'Valores em EUR · posições USD convertidas a '+fxUsd+' EUR/USD')
+      )
     )
   );
 }
@@ -3484,7 +3489,9 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
       );
     })(),
     /* ── Reembolso Dupla Tributação — explicação por país (segue o ano do dropdown acima) ── */
-    reembolsoByCountry.length>0&&h('div',{className:'card mb-6'},
+    h('div',{className:'tax-split mb-6'},
+      /* Left (8/12): Reembolso Dupla Tributação por país */
+      h('div',{className:'tax-split-main'},reembolsoByCountry.length>0&&h('div',{className:'card',style:{height:'100%'}},
       h(Shdr,{title:'Reembolso Dupla Tributação — por país',
         hint:(year==='ALL'?'Todos os anos':year)+' · dividendo bruto × taxa do tratado = retido no estrangeiro'}),
       h('div',{style:{overflowX:'auto'}},
@@ -3515,16 +3522,9 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
           )
         )
       )
-    ),
-    /* ── Bottom: side-by-side tax cards, each half-width on wider screens ── */
-    h('div',{className:'tax-split mt-6'},
-      /* Left: Imposto Pago por Ano (8 colunas) */
-      h('div',{className:'tax-split-main'},h(TaxPaidByYear,{pos,sold,income,wealth,cfg})),
-      /* Right: Redução por Período de Detenção (4 colunas) */
-      h('div',{className:'tax-split-side'},
-
-      /* Redução por Período de Detenção - CIRS Art. 43º */
-      h('div',{className:'card-sm'},
+    )),
+      /* Right (4/12): Redução por Período de Detenção */
+      h('div',{className:'tax-split-side'},h('div',{className:'card-sm',style:{height:'100%'}},
         h(Shdr,{title:'Redução por Período de Detenção · CIRS Art. 43º'}),
         (()=>{
           const tiers=[
@@ -3580,11 +3580,9 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
               '')
           );
         })()
-      ),
-
-      ), /* close tax-split-side */
-
-    ),
+      ))),
+    /* ── Bottom: Imposto Pago por Ano, full width ── */
+    h('div',{className:'mt-6'},h(TaxPaidByYear,{pos,sold,income,wealth,cfg})),
 
 
   );
@@ -3685,7 +3683,7 @@ function StockSignals({q}){
   const g1=q.g1,g5=q.g5;
   let signal=null;
   if(g1!=null&&g1<=0)signal={icon:'⚠️',label:'Corte / Congelamento',color:'var(--red)'};
-  else if(g1!=null&&g5!=null&&g1>0&&g5>0&&g1<g5*0.5)signal={icon:'📉',label:'Desaceleração',color:'var(--gold)'};
+  else if(g1!=null&&g5!=null&&g1>0&&g5>0&&g1<g5*0.5)signal={icon:'📉',label:'Desaceleração',color:'var(--tier-warn)'};
   else if(g1!=null)signal={icon:'✅',label:'Crescimento saudável',color:'var(--green)'};
   if(!signal)return null;
   const bars=(g1!=null&&g5!=null)&&(()=>{
@@ -3697,13 +3695,13 @@ function StockSignals({q}){
         h('span',null,'5Y'),h('span',{style:{color:'var(--muted)'}},fp(g5))
       ),
       h('div',{style:{position:'relative',height:7,background:'var(--s2)',borderRadius:4,overflow:'hidden',marginBottom:8}},
-        h('div',{style:{position:'absolute',left:0,top:0,height:'100%',width:barW5+'%',background:'var(--muted)',opacity:.4,borderRadius:4}})
+        h('div',{style:{position:'absolute',left:0,top:0,height:'100%',width:barW5+'%',background:'var(--blue)',opacity:.45,borderRadius:4}})
       ),
-      h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12,color:'var(--gold)',marginBottom:4}},
+      h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12,color:decelTone(g1,g5),marginBottom:4}},
         h('span',null,'1Y'),h('span',{style:{fontWeight:700}},fp(g1))
       ),
       h('div',{style:{position:'relative',height:7,background:'var(--s2)',borderRadius:4,overflow:'hidden'}},
-        h('div',{style:{position:'absolute',left:0,top:0,height:'100%',width:barW1+'%',background:g1<0?'var(--red)':'var(--gold)',borderRadius:4}})
+        h('div',{style:{position:'absolute',left:0,top:0,height:'100%',width:barW1+'%',background:decelTone(g1,g5),borderRadius:4}})
       )
     );
   })();
@@ -4833,7 +4831,7 @@ const DonutChart=memo(function DonutChart({pos,cfg,compact=false,half=false}){
   return h('div',{style:half
     ?{display:'grid',gridTemplateColumns:'1fr 1fr',gap:24,alignItems:'center'}
     :compact
-    ?{display:'flex',gap:24,alignItems:'flex-start',flexWrap:'wrap'}
+    ?{display:'flex',gap:32,alignItems:'center',flexWrap:'wrap',flex:1}
     :{display:'flex',flexDirection:'column',alignItems:'center',gap:20}},
     h(half?'div':React.Fragment,half?{style:{display:'flex',justifyContent:'center'}}:null,
     h('svg',{
@@ -4892,7 +4890,7 @@ const DonutChart=memo(function DonutChart({pos,cfg,compact=false,half=false}){
     )),
     // legend — compact: 3 cols to the right; half: 3 cols to the right (wider column); normal: 4 cols below
     h('div',{style:compact
-      ?{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(110px,1fr))',gap:'4px 16px',flex:'1 1 220px',minWidth:0,alignContent:'start'}
+      ?{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:'12px 20px',flex:'1 1 260px',minWidth:0,alignContent:'center'}
       :half
       ?{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:'6px 18px',alignContent:'start'}
       :{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'6px 24px',width:'100%',alignContent:'start'}},
@@ -4965,17 +4963,20 @@ function Dash({pos,qual,income,sold,cfg,setCfg,wealth}){
     // value with zero income dragged the average yield down to ~half its real value.
     // Correct approach: only positions that actually generate income go in either the
     // numerator OR the denominator — non-paying holdings are excluded from both.
+    // Everything in EUR: USD positions are converted before summing (mixing $ and € skewed the weights).
+    const fxY=cfg?.fxEurUsd||1.08;
+    const eur=(p,v)=>p.cat==='USD'?v/fxY:v;
     const incomeGen=(pos||[]).filter(p=>p.n>0&&p.cv>0).map(p=>{
       const dy=getQual(qm,p.t)?.dy||0;
       // fallback: last year actual income
       const hist=getIncomeYear(income,p.t,CUR_YEAR-1)||getIncomeYear(income,p.t,CUR_YEAR-2)||0;
-      return{p,inc:dy>0?dy*p.n*p.cv:hist};
+      return{p,inc:eur(p,dy>0?dy*p.n*p.cv:hist)};
     }).filter(x=>x.inc>0);
-    const totalPortVal=incomeGen.reduce((s,{p})=>s+p.n*p.cv,0);
+    const totalPortVal=incomeGen.reduce((s,{p})=>s+eur(p,p.n*p.cv),0);
     const totalAnnualIncAll=incomeGen.reduce((s,{inc})=>s+inc,0);
     const avgYield=totalPortVal>0?totalAnnualIncAll/totalPortVal:0;
     const incomeGenCost=incomeGen.filter(({p})=>getAv(p)>0);
-    const totalPortCost=incomeGenCost.reduce((s,{p})=>s+p.n*getAv(p),0);
+    const totalPortCost=incomeGenCost.reduce((s,{p})=>s+eur(p,p.n*getAv(p)),0);
     const totalAnnualIncForYoc=incomeGenCost.reduce((s,{inc})=>s+inc,0);
     const avgYoc=totalPortCost>0?totalAnnualIncForYoc/totalPortCost:0;
     const soldDivUSD=(sold||[]).filter(p=>p.cat==='USD').reduce((s,p)=>s+getSoldDivTotal(p),0);
@@ -4983,7 +4984,7 @@ function Dash({pos,qual,income,sold,cfg,setCfg,wealth}){
     const totDivUSD=pos.filter(p=>hasDividend(p,qm,income)&&p.cat==='USD').reduce((s,p)=>s+getIncome(income,p.t),0);
     const totDivEUR=pos.filter(p=>hasDividend(p,qm,income)&&p.cat!=='USD').reduce((s,p)=>s+getIncome(income,p.t),0);
     return{tv,tc,pl,plp,iu,ie,ietf,sectors,top10,avgYoc,avgYield,valUSD,valEUR,valEtfEq,valEtfBo,costUSD,costEUR,costETF,plUSD,plEUR,plEtfEq,plEtfBo,sectorPL:smPL,grandDivUSD:totDivUSD+soldDivUSD,grandDivEUR:totDivEUR+soldDivEUR,totDivUSD,soldDivUSD,totDivEUR,soldDivEUR};
-  },[pos,qual,income,sold]);
+  },[pos,qual,income,sold,cfg]);
 
   /* ── Performance Metrics: trailing CAGR ─────────────────────────────────
      Fixes applied per audit (Critical #4, #8):
@@ -5667,7 +5668,9 @@ function Port({pos,setPos,income,qual,setQual,cfg,sold,setSold}){
     const inUsd=flt==='USD';
     const conv=(p,v)=>(!inUsd&&p.cat==='USD')?v/fx:v;
     let cost=0,val=0,pl=0,totRet=0,peso=0;
-    const scs=[],ylds=[],yocs=[];
+    const scs=[];
+    // Yield and YoC weighted like the Dashboard: annual income ÷ value (yield) and ÷ cost (YoC), in EUR.
+    let incV=0,valY=0,incC=0,costY=0;
     filtered.forEach(p=>{
       const q=getQual(qualMap,p.t);
       const c=cx(p,q?.dy);
@@ -5676,12 +5679,13 @@ function Port({pos,setPos,income,qual,setQual,cfg,sold,setSold}){
       const yoc=dy>0&&p.cv>0&&p.av>0?c.yoc:null;
       cost+=conv(p,c.cost);val+=conv(p,c.val);pl+=conv(p,c.pl);totRet+=conv(p,p._totalret);peso+=c.val/tots.all;
       if(q&&q.sc!=null)scs.push(q.sc);
-      if(yld>0)ylds.push(yld);
-      if(yoc>0)yocs.push(yoc);
+      const fxW=cfg?.fxEurUsd||1.08,w=v=>p.cat==='USD'?v/fxW:v;
+      if(yld>0&&p.cv>0&&p.n>0){incV+=w(yld*p.cv*p.n);valY+=w(p.cv*p.n);}
+      if(yoc>0&&p.av>0&&p.n>0){incC+=w(yoc*p.av*p.n);costY+=w(p.av*p.n);}
     });
     const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
     return{n:filtered.length,sym:inUsd?'$':'€',cost,val,pl,plp:cost>0?pl/cost:null,peso,totRet,
-      sc:avg(scs),yld:avg(ylds),yoc:avg(yocs),mixed:flt==='TODAS'&&filtered.some(p=>p.cat==='USD')};
+      sc:avg(scs),yld:valY>0?incV/valY:null,yoc:costY>0?incC/costY:null,mixed:flt==='TODAS'&&filtered.some(p=>p.cat==='USD')};
   },[filtered,flt,qualMap,tots,cfg]);
 
   /* ── P/L summary cards ── */
@@ -5828,8 +5832,8 @@ function Port({pos,setPos,income,qual,setQual,cfg,sold,setSold}){
             return h('tr',{key:p.id||p.t},
               h('td',{className:'font-mono'},h(TickerLink,{t:p.t})),
               h('td',{style:{whiteSpace:'nowrap'}},_sc!=null?_band+' '+_sc:'—'),
-              h('td',{className:'mono-sm-muted'},fn(p.av)),
-              h('td',{className:'mono-sm',title:priceFreshness(p).title},fn(p.cv),h(StaleDot,{p})),
+              h('td',{className:'mono-sm-muted'},p.av!=null?s+fn(p.av):'—'),
+              h('td',{className:'mono-sm',title:priceFreshness(p).title},p.cv!=null?s+fn(p.cv):'—',h(StaleDot,{p})),
               h('td',{className:'text-muted'},s+fn(c.cost)),
               h('td',null,s+fn(c.val)),
               h('td',{style:{color:c.pl>=0?'var(--green)':'var(--red)'}},( c.pl>=0?'+':'-')+s+fn(Math.abs(c.pl))),
@@ -5853,8 +5857,8 @@ function Port({pos,setPos,income,qual,setQual,cfg,sold,setSold}){
             h('td',{style:{color:holdTotals.pl>=0?'var(--green)':'var(--red)'}},(holdTotals.pl>=0?'+':'-')+holdTotals.sym+fn(Math.abs(holdTotals.pl))),
             h('td',{style:{color:(holdTotals.plp||0)>=0?'var(--green)':'var(--red)'},title:'P&L total / custo total'},holdTotals.plp!=null?fp(holdTotals.plp):'—'),
             h('td',{style:{color:holdTotals.totRet>=0?'var(--green)':'var(--red)'}},(holdTotals.totRet>=0?'+':'-')+holdTotals.sym+fn(Math.abs(holdTotals.totRet))),
-            h('td',{className:'text-muted',title:'Média simples das posições com yield'},holdTotals.yld!=null?'Ø '+fp(holdTotals.yld):'—'),
-            h('td',{className:'text-muted',title:'Média simples das posições com YoC'},holdTotals.yoc!=null?'Ø '+fp(holdTotals.yoc):'—'),
+            h('td',{className:'text-muted',title:'Média ponderada pelo valor: rendimento anual ÷ valor (em EUR)'},holdTotals.yld!=null?'Ø '+fp(holdTotals.yld):'—'),
+            h('td',{className:'text-muted',title:'Média ponderada pelo custo: rendimento anual ÷ custo (em EUR), como no Dashboard'},holdTotals.yoc!=null?'Ø '+fp(holdTotals.yoc):'—'),
             h('td',{className:'text-[var(--muted)]'},fp(holdTotals.peso))
           ))
         )
@@ -6139,7 +6143,7 @@ function Conf({wealth,cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onR
       tabBtn('metricas','Quality Score'),
     ),
     /* ── Config tab (original Conf layout) ── */
-    confTab==='config'&&h('div',{className:'grid gap-5 grid-cols-1 md:grid-cols-[1fr_4fr]'},
+    confTab==='config'&&h('div',{className:'conf-split'},
     h('div',{className:'flex flex-col gap-4'},
     h('div',{className:'card-sm'},
       h(Shdr,{title:'Dados'}),
@@ -7022,11 +7026,12 @@ const BarChart=memo(function BarChart({tots,color,label,sm,estTotal,growth}){
     h('div',{style:{display:'flex',gap:6,alignItems:'flex-end',height:176}},
       nextEst>0&&h('div',{key:'next',title:'Previsão: estimativa de '+CUR_YEAR+' × (1 + crescimento do dividendo de '+((growth-1)*100).toFixed(1)+'%, em Config)',
         style:{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:5}},
-        h('div',{style:{fontSize:11,fontWeight:700,color:'var(--green)'}},'+'+((growth-1)*100).toFixed(0)+'%'),
-        h('div',{style:{fontSize:11,color:'var(--muted)'}},'est. '+sm+fn(nextEst,0)),
+        // Projection: its own colour (--proj) so it never reads as money already received.
+        h('div',{style:{fontSize:11,fontWeight:700,color:'var(--proj)'}},'+'+((growth-1)*100).toFixed(0)+'%'),
+        h('div',{style:{fontSize:11,color:'var(--proj)'}},'est. '+sm+fn(nextEst,0)),
         h('div',{style:{width:'100%',height:Math.max(nextEst/maxV*100*0.92,2)+'px',borderRadius:'3px 3px 0 0',
-          background:hatch(color),border:'1px dashed '+color,opacity:.6}}),
-        h('div',{style:{fontSize:11,color:'var(--muted)'}},(CUR_YEAR+1)+' (prev.)')
+          background:hatch('rgba(167,139,250,.55)'),border:'1px dashed var(--proj)',boxSizing:'border-box'}}),
+        h('div',{style:{fontSize:11,color:'var(--proj)',fontWeight:600}},(CUR_YEAR+1)+' (prev.)')
       ),
       CHART_YEARS.map((y,i)=>{
         const val=tots[y]||0;
@@ -7808,16 +7813,20 @@ function AnalyticsPage({pos,qual,income,sold,cfg,wealth}){
           h('div',{className:'grid grid-cols-1 sm:grid-cols-3 gap-2'},
             rows.map((it,i)=>{
               const fillPct=it.covered?100:it.partial?it.partialPct:0;
-              const coverageColor=it.covered?'var(--green)':it.partial?'var(--gold)':'var(--muted)';
+              // Covered green; in progress by how much is covered (orange < ⅓, yellow < ⅔, turquoise above);
+              // not yet covered stays grey.
+              const coverageColor=it.covered?'var(--green)':it.partial
+                ?(it.partialPct<33?'var(--tier-warn)':it.partialPct<66?'var(--tier-ok)':'var(--blue)')
+                :'var(--muted)';
               return h('div',{key:i,style:{minWidth:0,padding:10,background:'var(--surface)',
-                border:'1px solid var(--border)',borderRadius:8}},
+                border:'1px solid '+(it.partial?`color-mix(in srgb,${coverageColor} 45%,var(--border))`:'var(--border)'),borderRadius:8}},
                 h('div',{style:{display:'flex',alignItems:'flex-start',gap:7}},
                   h('span',{style:{fontSize:13}},it.icon),
                   h('span',{style:{fontSize:12,color:'var(--text)',fontWeight:600,flex:1,minWidth:0}},it.label),
                   h('span',{style:{fontSize:12,color:'var(--text)',fontWeight:700,whiteSpace:'nowrap'}},'€'+fn(it.amount)+'/mês')
                 ),
                 h('div',{style:{height:5,marginTop:9,background:'var(--s2)',borderRadius:4,overflow:'hidden'}},
-                  h('div',{style:{height:'100%',width:fillPct+'%',background:coverageColor,borderRadius:4,transition:'width .4s ease'}})
+                  h('div',{style:{height:'100%',width:fillPct+'%',background:it.partial?`linear-gradient(90deg,color-mix(in srgb,${coverageColor} 50%,transparent),${coverageColor})`:coverageColor,borderRadius:4,transition:'width .4s ease'}})
                 ),
                 h('div',{style:{fontSize:11,color:coverageColor,marginTop:5,fontWeight:600}},
                   it.covered?'Coberto por dividendos':it.partial?it.partialPct.toFixed(0)+'% coberto':'Por cobrir')
@@ -7843,7 +7852,7 @@ function AnalyticsPage({pos,qual,income,sold,cfg,wealth}){
       ),
 
       /* Alocação por Posição — 8/12 cols */
-      h('div',{className:'card',style:{gridColumn:'span 8'}},
+      h('div',{className:'card donut-card',style:{gridColumn:'span 8'}},
         h(Shdr,{title:'Alocação por Posição'}),
         h(DonutChart,{pos,cfg,compact:true})
       ),
@@ -7865,9 +7874,9 @@ function AnalyticsPage({pos,qual,income,sold,cfg,wealth}){
           h('span',{style:{fontSize:13,color:'var(--muted)',whiteSpace:'nowrap'}},
             sl.t,' ',h('span',{style:{color:sl.col,fontWeight:700}},(sl.pct*100).toFixed(1)+'%'))
         );
-        return h('div',{className:'card',style:{gridColumn:'span 8'}},
+        return h('div',{className:'card donut-card',style:{gridColumn:'span 8'}},
           h(Shdr,{title:'Exposição por Stock',hint:stocks.length+' posições'}),
-          h('div',{style:{display:'flex',gap:24,alignItems:'flex-start',flexWrap:'wrap'}},
+          h('div',{style:{display:'flex',gap:32,alignItems:'center',flexWrap:'wrap',flex:1}},
             /* Pie */
             h('div',{style:{flexShrink:0}},
               h('svg',{width:220,height:220,style:{filter:'drop-shadow(0 4px 24px rgba(0,0,0,.4))'}},
@@ -7881,7 +7890,7 @@ function AnalyticsPage({pos,qual,income,sold,cfg,wealth}){
               )
             ),
             /* legend: same grid as Alocação por Posição (row by row) */
-            h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(110px,1fr))',gap:'4px 16px',flex:'1 1 220px',minWidth:0,alignContent:'start'}},
+            h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:'12px 20px',flex:'1 1 260px',minWidth:0,alignContent:'center'}},
               slices.map(sl=>h(LegRow,{key:sl.t,sl}))
             )
           )
@@ -8461,6 +8470,14 @@ function ChowderRuleCard({pos,qualMap,income}){
 // most decelerated first; free rows (up to DECEL_ROWS) go to the stocks closest to
 // decelerating, shown in green as "a acelerar".
 const DECEL_ROWS=19;
+// Colour of the 1Y bar by how much growth slowed versus 5Y (ratio 1Y/5Y):
+// accelerating green · mild slowdown yellow · marked orange · sharp red.
+function decelTone(g1,g5){
+  if(g1==null||g5==null)return'var(--muted)';
+  if(g1<0)return'var(--red)';
+  const r=g5>0?g1/g5:1;
+  return r>=1?'var(--green)':r>=0.66?'var(--tier-ok)':r>=0.33?'var(--tier-warn)':'var(--red)';
+}
 function DecelerationCard({pos,qualMap}){
       const all=pos.filter(p=>p.cat!=='ETF'&&p.n>0).map(p=>{
         const q=getQual(qualMap,p.t);
@@ -8474,10 +8491,14 @@ function DecelerationCard({pos,qualMap}){
       const extra=rows.length-Math.min(slowing.length,DECEL_ROWS);
       return h('div',{className:'card',style:{height:'100%'}},
         h(Shdr,{title:'Desaceleração',hint:'1Y DGR abaixo do 5Y DGR — '+Math.min(slowing.length,DECEL_ROWS)+' a desacelerar'+(extra?' · '+extra+' a acelerar':'')}),
+        h('div',{style:{display:'flex',gap:14,flexWrap:'wrap',fontSize:11,color:'var(--muted)',marginBottom:6}},
+          h('span',null,h('span',{style:{display:'inline-block',width:14,height:6,borderRadius:3,background:'var(--blue)',opacity:.45,marginRight:5}}),'5Y (referência)'),
+          ...[['var(--red)','1Y < ⅓ do 5Y'],['var(--tier-warn)','⅓–⅔'],['var(--tier-ok)','⅔–1×'],['var(--green)','a acelerar']].map(([c,l])=>
+            h('span',{key:l},h('span',{style:{display:'inline-block',width:14,height:6,borderRadius:3,background:c,marginRight:5}}),l))),
         h('div',null,
           ...rows.map((x,i)=>{
             const up=x.g1>=x.g5;
-            const col=up?'var(--green)':'var(--gold)';
+            const col=decelTone(x.g1,x.g5);
             const barW1=Math.min(x.g1/maxG*100,100);
             const barW5=Math.min(x.g5/maxG*100,100);
             return h('div',{key:x.t,title:up?'A acelerar: crescimento a 1 ano acima do de 5 anos':'A desacelerar: crescimento a 1 ano abaixo do de 5 anos',
@@ -8488,15 +8509,15 @@ function DecelerationCard({pos,qualMap}){
                 up&&h('div',{style:{fontSize:10,color:'var(--green)',marginTop:2}},'a acelerar')),
               h('div',{style:{flex:1}},
                 h('div',{style:{position:'relative',height:7,background:'var(--s2)',borderRadius:4,overflow:'hidden',marginBottom:3}},
-                  h('div',{style:{position:'absolute',left:0,top:0,height:'100%',width:barW5+'%',background:'var(--muted)',opacity:.4,borderRadius:4}})
+                  h('div',{style:{position:'absolute',left:0,top:0,height:'100%',width:barW5+'%',background:'var(--blue)',opacity:.45,borderRadius:4}})
                 ),
                 h('div',{style:{position:'relative',height:7,background:'var(--s2)',borderRadius:4,overflow:'hidden'}},
-                  h('div',{style:{position:'absolute',left:0,top:0,height:'100%',width:barW1+'%',background:col,borderRadius:4}})
+                  h('div',{style:{position:'absolute',left:0,top:0,height:'100%',width:barW1+'%',background:`linear-gradient(90deg,color-mix(in srgb,${col} 55%,transparent),${col})`,borderRadius:4}})
                 )
               ),
               h('div',{style:{textAlign:'right',flexShrink:0,minWidth:100}},
                 h('div',{style:{fontSize:12,color:col,fontWeight:700}},'1Y '+fp(x.g1)),
-                h('div',{style:{fontSize:11,color:'var(--muted)'}},'5Y '+fp(x.g5))
+                h('div',{style:{fontSize:11,color:'var(--blue)',opacity:.8}},'5Y '+fp(x.g5))
               )
             );
           })
@@ -8974,7 +8995,7 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
                       h('td',{className:'font-semibold'},h(TickerLink,{t:r.t})),
                       h('td',{className:'text-right text-[var(--green)]'},sym+fn(r.div)),
                       h('td',{style:{textAlign:'right',fontWeight:700,color:'var(--gold)',fontFamily:'var(--mono)'}},
-                        r.units.toFixed(3)+(r.whole>0?' ('+r.whole+')':'')
+                        r.units.toFixed(3)
                       ),
                       h('td',{style:{padding:'5px 12px',minWidth:110}},
                         h('div',{style:{display:'flex',alignItems:'center',gap:8}},
@@ -9123,9 +9144,9 @@ function TesesDividends({data}){
   const cur=!data.currency||data.currency==='USD'?'$':data.currency==='EUR'?'€':data.currency+' ';
   const per=data.periodLabel||'FY';   // 'FY' (exercício) por defeito; ex.: 'Ano de pagamento'
   const M={
-    dps:{label:'Dividendo por acção',short:'DPS',col:'var(--green)',fmt:v=>cur+(Math.abs(v*100-Math.round(v*100))>1e-6?v.toFixed(3):v.toFixed(2))},
-    yield:{label:'Dividend yield',short:'Yield',col:'var(--blue)',fmt:v=>(v*100).toFixed(2)+'%'},
-    payout:{label:'Payout ratio',short:'Payout',col:'var(--gold)',fmt:v=>(v*100).toFixed(2)+'%'}
+    dps:{label:'Dividendo por acção',short:'DPS',col:'#10b981',fmt:v=>cur+(Math.abs(v*100-Math.round(v*100))>1e-6?v.toFixed(3):v.toFixed(2))},
+    yield:{label:'Dividend yield',short:'Yield',col:'#60a5fa',fmt:v=>(v*100).toFixed(2)+'%'},
+    payout:{label:'Payout ratio',short:'Payout',col:'#f59e0b',fmt:v=>(v*100).toFixed(2)+'%'}
   };
   const KEYS=['dps','yield','payout'];
   const shown=KEYS.filter(k=>!hidden[k]&&hist.some(r=>Number.isFinite(r[k])));
@@ -9290,40 +9311,25 @@ function TesesPage({pos,teses,qual}){
         h('div',{style:{marginTop:8}},TesesList(t.moat?.points))
       ),
 
-      h('div',{className:'card mb-4'},
-        h(Shdr,{title:'3. Principal Risco'}),
-        h('p',{style:{fontSize:14,lineHeight:1.6,marginTop:8,whiteSpace:'pre-wrap'}},t.mainRisk||'Por preencher.')
-      ),
-
-      h('div',{className:'card mb-4'},
-        h(Shdr,{title:'4. Resposta Estratégica'}),
-        h('div',{style:{marginTop:8}},TesesList(t.strategicResponse))
-      ),
-
-      h('div',{className:'card mb-4'},
-        h(Shdr,{title:'5. Growth Thesis'}),
-        h('p',{style:{fontSize:14,lineHeight:1.6,marginTop:8,whiteSpace:'pre-wrap'}},t.growthThesis||'Por preencher.')
-      ),
-
       // Bull and Bear cases side by side (stacked on narrow screens).
       h('div',{className:'grid grid-cols-1 sm:grid-cols-2 gap-5 mb-4'},
         h('div',{className:'card'},
-          h(Shdr,{title:'6. Bull Case'}),
+          h(Shdr,{title:'3. Bull Case'}),
           h('div',{style:{marginTop:8}},TesesList(t.bullCase,'var(--green)'))
         ),
         h('div',{className:'card'},
-          h(Shdr,{title:'7. Bear Case'}),
+          h(Shdr,{title:'4. Bear Case'}),
           h('div',{style:{marginTop:8}},TesesList(t.bearCase,'var(--red)'))
         )
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'8. O Que Destruiria a Tese?'}),
+        h(Shdr,{title:'5. O Que Destruiria a Tese?'}),
         h('div',{style:{marginTop:8}},TesesList(t.whatWouldBreakThesis,'var(--red)'))
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'9. Decisão Final'}),
+        h(Shdr,{title:'6. Decisão Final'}),
         h('div',{style:{marginTop:8}},
           TesesRow('Rating',t.finalDecision?.rating),
           TesesRow('Fair value',t.finalDecision?.fairValue),
