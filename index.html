@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.39';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.40';</script>
 <meta name="theme-color" content="#0a0a0b">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -7806,16 +7806,20 @@ function AnalyticsPage({pos,qual,income,sold,cfg,wealth}){
           h('div',{className:'grid grid-cols-1 sm:grid-cols-3 gap-2'},
             rows.map((it,i)=>{
               const fillPct=it.covered?100:it.partial?it.partialPct:0;
-              const coverageColor=it.covered?'var(--green)':it.partial?'var(--gold)':'var(--muted)';
+              // Covered green; in progress by how much is covered (orange < ⅓, yellow < ⅔, turquoise above);
+              // not yet covered stays grey.
+              const coverageColor=it.covered?'var(--green)':it.partial
+                ?(it.partialPct<33?'var(--tier-warn)':it.partialPct<66?'var(--tier-ok)':'var(--blue)')
+                :'var(--muted)';
               return h('div',{key:i,style:{minWidth:0,padding:10,background:'var(--surface)',
-                border:'1px solid var(--border)',borderRadius:8}},
+                border:'1px solid '+(it.partial?`color-mix(in srgb,${coverageColor} 45%,var(--border))`:'var(--border)'),borderRadius:8}},
                 h('div',{style:{display:'flex',alignItems:'flex-start',gap:7}},
                   h('span',{style:{fontSize:13}},it.icon),
                   h('span',{style:{fontSize:12,color:'var(--text)',fontWeight:600,flex:1,minWidth:0}},it.label),
                   h('span',{style:{fontSize:12,color:'var(--text)',fontWeight:700,whiteSpace:'nowrap'}},'€'+fn(it.amount)+'/mês')
                 ),
                 h('div',{style:{height:5,marginTop:9,background:'var(--s2)',borderRadius:4,overflow:'hidden'}},
-                  h('div',{style:{height:'100%',width:fillPct+'%',background:coverageColor,borderRadius:4,transition:'width .4s ease'}})
+                  h('div',{style:{height:'100%',width:fillPct+'%',background:it.partial?`linear-gradient(90deg,color-mix(in srgb,${coverageColor} 50%,transparent),${coverageColor})`:coverageColor,borderRadius:4,transition:'width .4s ease'}})
                 ),
                 h('div',{style:{fontSize:11,color:coverageColor,marginTop:5,fontWeight:600}},
                   it.covered?'Coberto por dividendos':it.partial?it.partialPct.toFixed(0)+'% coberto':'Por cobrir')
