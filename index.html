@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.12';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.13';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -9296,10 +9296,7 @@ function TesesPage({pos,teses,qual}){
           h('div',{style:{fontSize:10,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:4}},'Pergunta de Acompanhamento Trimestral'),
           h('p',{style:{fontSize:12,lineHeight:1.6}},t.followUpQuestion)
         )
-      ),
-
-      h('div',{style:{fontSize:10,color:'var(--muted)',textAlign:'center',marginTop:20,fontStyle:'italic'}},
-        'Síntese da tese de investimento, não uma recomendação financeira personalizada. Actualizar antes de decisões de compra/venda.')
+      )
     )
   );
 }
