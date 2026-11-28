@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.52';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.53';</script>
 <meta name="theme-color" content="#0a0a0b">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -339,6 +339,9 @@ a{color:var(--blue);text-decoration:none;}
 .donut-card{display:flex;flex-direction:column;}
 /* Dashboard donut: stacked above its legend on phones so it can use the full width. */
 @media(max-width:640px){.donut-half{grid-template-columns:minmax(0,1fr) !important;}}
+.nw-kpis{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr));}
+@media(max-width:639px){.nw-kpis>:last-child{grid-column:1/-1;}}
+@media(min-width:640px){.nw-kpis{grid-template-columns:repeat(3,minmax(0,1fr)) minmax(0,1.5fr);}}
 /* Navigation centred on the page: logo left, tabs centre, save button right. */
 @media(min-width:641px){
   .bar{display:grid;grid-template-columns:1fr auto 1fr;}
@@ -2280,7 +2283,8 @@ function PatrimonioPage({wealth,pos,cfg}){
   return h('div',null, // full width like the other pages (.page already adds the side padding)
 
     /* ── Summary KPIs ─────────────────────────────────────────────────────── */
-    h('div',{className:'grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6'},
+    // KPI row: three cards of 8/3 columns each and "Por Investidor" with 4/12.
+    h('div',{className:'nw-kpis mb-6'},
       h('div',{className:'kpi kpi-bl'},
         h('div',{className:'text-[10px] font-bold uppercase tracking-[.06em] text-slate-500 mb-1'},'Total Património'),
         h('div',{style:{fontSize:22,fontWeight:800,color:'var(--text)'}},'€'+fn(grandTotal)),
@@ -2318,7 +2322,8 @@ function PatrimonioPage({wealth,pos,cfg}){
           if(portAll>0)vals[PORT_OWNER]=(vals[PORT_OWNER]||0)+portAll;
           const entries=Object.entries(vals).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
           const tot=entries.reduce((s,[,v])=>s+v,0);
-          return h('div',{style:{display:'flex',flexDirection:'column',gap:6}},
+          // Two owners per row.
+          return h('div',{style:{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:'8px 18px'}},
             entries.map(([owner,val])=>{
               const s=wOwners[owner]||{color:'#c084fc',bg:'#2a1a2a'};
               const pct=tot>0?val/tot:0;
