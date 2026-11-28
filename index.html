@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.43';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.44';</script>
 <meta name="theme-color" content="#0a0a0b">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -8990,7 +8990,7 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
                       h('td',{className:'font-semibold'},h(TickerLink,{t:r.t})),
                       h('td',{className:'text-right text-[var(--green)]'},sym+fn(r.div)),
                       h('td',{style:{textAlign:'right',fontWeight:700,color:'var(--gold)',fontFamily:'var(--mono)'}},
-                        r.units.toFixed(3)+(r.whole>0?' ('+r.whole+')':'')
+                        r.units.toFixed(3)
                       ),
                       h('td',{style:{padding:'5px 12px',minWidth:110}},
                         h('div',{style:{display:'flex',alignItems:'center',gap:8}},
