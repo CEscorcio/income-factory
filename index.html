@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.49';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.50';</script>
 <meta name="theme-color" content="#0a0a0b">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -6066,16 +6066,18 @@ function PricePanel({cfg,setCfg,pos,setPos,wealth}){
     message&&h('div',{style:{fontSize:12,color:'var(--muted)',marginTop:6}},message),
     rows.length>0&&h('div',{style:{overflowX:'auto',marginTop:8}},
       h('table',{style:{width:'100%',borderCollapse:'collapse'}},
-        h('thead',null,h('tr',null,['','Ticker','Símbolo','Fornecedor','Novo','Actual','Δ','Estado'].map(x=>h('th',{key:x,style:{...cell,color:'var(--muted)',textAlign:'left',fontWeight:700}},x)))),
+        h('thead',null,h('tr',null,['','Ticker','Fornecedor','Novo','Actual','Δ','Estado'].map(x=>h('th',{key:x,style:{...cell,color:'var(--muted)',textAlign:'left',fontWeight:700}},x)))),
         h('tbody',null,rows.map((r,i)=>{
           const p=active.find(x=>x.t===r.t);
           return h('tr',{key:r.t},
             h('td',{style:cell},h('input',{type:'checkbox',checked:!!r.apply,disabled:r.status!=='ok'||running,
               onChange:e=>setRows(rows.map((x,j)=>j===i?{...x,apply:e.target.checked}:x))})),
-            h('td',{style:{...cell,fontWeight:700},title:r.ref?'Fora da carteira (secção Investimentos do Património): o preço é guardado em refPrices':''},r.t,r.ref&&h('span',{style:{fontWeight:400,color:'var(--muted)',marginLeft:4}},'(ref.)')),
-            h('td',{style:cell},h('input',{className:'ed',style:{width:84,fontSize:12},defaultValue:r.symbol,disabled:running,key:r.t+r.symbol,
+            // Ticker and the symbol asked to the provider in one cell: the symbol field only
+            // shows when it differs from the ticker or the ticker failed (to fix e.g. LGEN → LGEN.L).
+            h('td',{style:{...cell,fontWeight:700},title:r.ref?'Fora da carteira (secção Investimentos do Património): o preço é guardado em refPrices':''},r.t,r.ref&&h('span',{style:{fontWeight:400,color:'var(--muted)',marginLeft:4}},'(ref.)'),
+              (r.symbol!==r.t||r.status==='error')&&h('div',{style:{marginTop:4}},h('input',{className:'ed',style:{width:96,fontSize:12},defaultValue:r.symbol,disabled:running,key:r.t+r.symbol,
               title:'Formato: TICKER ou TICKER.BOLSA ('+Object.keys(PRICE_EXCHANGES).filter(k=>k!=='US').join(', ')+')',
-              onBlur:e=>{if(p&&e.target.value.trim().toUpperCase()!==r.symbol){changeSymbol(p,e.target.value);setRows(rows.map((x,j)=>j===i?{...x,symbol:e.target.value.trim().toUpperCase()||defaultPriceSymbol(p),status:'pending',apply:false}:x));}}})),
+              onBlur:e=>{if(p&&e.target.value.trim().toUpperCase()!==r.symbol){changeSymbol(p,e.target.value);setRows(rows.map((x,j)=>j===i?{...x,symbol:e.target.value.trim().toUpperCase()||defaultPriceSymbol(p),status:'pending',apply:false}:x));}}}))),
             h('td',{style:cell},r.raw!=null?fmt(r.raw,r.raw<10?4:2)+' '+r.rawCurrency+' · '+short[r.via]:''),
             h('td',{style:{...cell,color:'var(--gold)'}},r.price!=null?fmt(r.price,r.price<10?4:2)+' '+r.target:''),
             h('td',{style:cell},fmt(r.current,r.current<10?4:2)),
