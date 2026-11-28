@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.9';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.10';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3094,17 +3094,11 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
             h('tr',{style:{background:'var(--s2)',borderTop:'2px solid var(--border)',fontWeight:700}},
               h('td',{style:{padding:'8px 10px',color:'var(--gold)'}},'TOTAL'),
               h('td',{colSpan:6}),
-              h('td',{style:{padding:'8px 8px',textAlign:'right',color:'var(--muted)',fontFamily:'var(--mono)',fontSize:11}},
-                cgTotals.proceeds>0?'€'+fn(cgTotals.proceeds):'—'),
-              h('td',{style:{padding:'8px 8px',textAlign:'right',color:'var(--muted)',fontFamily:'var(--mono)',fontSize:11}},
-                cgTotals.cost>0?'€'+fn(cgTotals.cost):'—'),
-              h('td',{style:{padding:'8px 8px',textAlign:'right',color:'var(--muted)',fontFamily:'var(--mono)',fontSize:11}},
-                cgTotals.fee>0?'€'+fn(cgTotals.fee):'—'),
-              h('td',{style:{padding:'8px 8px',textAlign:'right',fontWeight:800,color:cgTotals.pl>=0?'var(--green)':'var(--red)'}},
-                (cgTotals.pl>=0?'+':'')+fn(cgTotals.pl)),
-              h('td'),
-              h('td',{style:{padding:'8px 10px',textAlign:'right',fontWeight:800,color:'var(--red)'}},
-                cgTotals.tax>0?'-€'+cgTotals.tax.toFixed(2):'€0,00')
+              // Same columns and number format as the rows above (Proceeds, Cost Basis, Fee, P&L).
+              h('td',{className:'text-right',style:{padding:'8px 8px'}},cgTotals.proceeds>0?fe(cgTotals.proceeds):'—'),
+              h('td',{className:'text-right',style:{padding:'8px 8px'}},cgTotals.cost>0?fe(cgTotals.cost):'—'),
+              h('td',{className:'text-right text-[var(--muted)]',style:{padding:'8px 8px'}},cgTotals.fee>0?fe(cgTotals.fee):'—'),
+              h('td',{style:{padding:'8px 8px',textAlign:'right',fontWeight:800,color:plCol(cgTotals.pl)}},fp(cgTotals.pl))
             )
           )
         )
