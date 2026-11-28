@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.20';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.21';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -117,7 +117,8 @@ a{color:var(--blue);text-decoration:none;}
 /* Table whose header stays visible while its rows scroll (Quality Score) */
 /* Long tables grow with the page (no inner scroll); the header sticks under the top bar. */
 .sticky-head{overflow:visible !important;}
-.tall-head thead th{padding-top:24px;padding-bottom:24px;}
+/* Table headers on every page: double height (overrides inline paddings). */
+.page thead th{padding-top:24px !important;padding-bottom:24px !important;}
 .sticky-head thead th{position:sticky;top:48px;z-index:2;background:var(--surface);box-shadow:inset 0 -1px 0 var(--border);}
 .sticky-head thead th:first-child{border-top-left-radius:10px;}
 .sticky-head thead th:last-child{border-top-right-radius:10px;}
@@ -5752,7 +5753,7 @@ function Port({pos,setPos,income,qual,setQual,cfg,sold,setSold}){
         ['TODAS','USD','EUR','ETF'].map(f=>h('button',{key:f,className:'fb'+(flt===f?' on':''),onClick:()=>setFlt(f)},f==='TODAS'?'Todas':f)),
       ),
       h('div',{className:'card-table overflow-x-auto'},
-        h('table',{className:'tall-head'},
+        h('table',null,
           h('thead',null,h('tr',null,
             h(TH,{f:'ticker',label:'Ticker',align:'left'}),
             h(TH,{f:'sc',label:'Score'}),
@@ -8714,7 +8715,7 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
           h('span',{style:{fontSize:12,color:'var(--muted)',fontStyle:'italic'}},'Est. '+CUR_YEAR+' = yield × posições × preço · Est. '+(CUR_YEAR+1)+' = Est. '+CUR_YEAR+' × '+GROWTH.toFixed(3))
         ),
         h('div',{className:'card-table sticky-head'},
-          h('table',{className:'tall-head'},
+          h('table',null,
             h('thead',null,h('tr',null,
               thSort('ticker','Ticker',{textAlign:'left'}),
               thSort('est','Est. '+CUR_YEAR,{color:'var(--muted)',fontStyle:'italic',fontSize:13,whiteSpace:'nowrap'}),
@@ -8734,7 +8735,7 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
       h(Shdr,{title:'Dividendos — Posições Fechadas',hint:'Rendimento por ano durante o período de detenção'}),
       (()=>{
         return h('div',{className:'card-table sticky-head'},
-          h('table',{className:'tall-head'},
+          h('table',null,
             h('thead',null,h('tr',null,
               h('th',{className:'text-left'},'Ticker'),
               h('th',{style:{color:'var(--muted)',fontStyle:'italic',fontSize:13,whiteSpace:'nowrap'}},'Est. '+new Date().getFullYear()),
