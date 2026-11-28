@@ -199,7 +199,7 @@ The owner defaults to the capitalised prefix (`anaInvestimentos` → `Ana`) and 
 
 An object keyed by ticker, or `null` (`KO`, `NN.AS`, `IBE.MC` …). The only enforced rule is that each thesis is an object, so a missing section simply doesn't render. Use the template below to keep every thesis consistent.
 
-**Only the fields in the template below are used.** The app ignores anything else, so don't add extra sections (e.g. SWOT, bull case, valuation models, charts): they make the file bigger without showing anywhere.
+**Only the fields in the template below are used.** The app ignores anything else, so don't add extra sections (e.g. valuation models, charts): they make the file bigger without showing anywhere.
 
 Currently written: JPM, PEP, PG, MAIN, O, KO, XOM, TROW, COR.LS, DG.PA, NOV.DE, MCD, JNJ, VICI, MO, WM, NN.AS, BTI, AD.AS, IBE.MC, LGEN.
 
@@ -228,7 +228,6 @@ Currently written: JPM, PEP, PG, MAIN, O, KO, XOM, TROW, COR.LS, DG.PA, NOV.DE, 
   "bullCase": ["…"],
   "bearCase": ["…"],
   "whatWouldBreakThesis": ["…"],
-  "valuation": [ { "scenario": "Bear|Base|Bull", "eps": "$2,70", "pe": "22x", "fairValue": "$59" } ],
   "scorecardTotal": "84 / 100",
   "scorecard": [ { "metric": "Payout Ratio", "score": "10 / 12" } ],     // 12 metrics; the maxima add up to 100
   "finalDecision": { "rating": "BUY / HOLD", "fairValue": "~$94", "dividendYield": "2,41%", "epsGrowth": "4–6%", "divGrowth": "4–6%", "totalReturn": "…" },
@@ -251,7 +250,7 @@ Currently written: JPM, PEP, PG, MAIN, O, KO, XOM, TROW, COR.LS, DG.PA, NOV.DE, 
 }
 ```
 
-Section order on the Teses page: 1 Tese · 2 Moat · 3 Principal Risco · 4 Resposta Estratégica · 5 Growth Thesis · 6 Bull Case and 7 Bear Case (side by side) · 8 O Que Destruiria a Tese · 9 Valuation · 10 Decisão Final. `financials` (with `financialsYears`) is shown as a **Financial Quality** table under the Qualidade do Dividendo card. The `scorecard` (with `scorecardTotal`) is shown inside the **Fundamentais & Scorecard** card near the top, each score coloured by its share of the maximum (≥80% green, ≥60% blue, ≥40% yellow, ≥20% orange, below red). The Factores, Sinais, Qualidade do Dividendo and Fundamentais blocks above them come from `quality`, not from the thesis.
+Section order on the Teses page: 1 Tese · 2 Moat · 3 Principal Risco · 4 Resposta Estratégica · 5 Growth Thesis · 6 Bull Case and 7 Bear Case (side by side) · 8 O Que Destruiria a Tese · 9 Decisão Final. `financials` (with `financialsYears`) is shown as a **Financial Quality** table under the Qualidade do Dividendo card. The `scorecard` (with `scorecardTotal`) is shown inside the **Fundamentais & Scorecard** card near the top, each score coloured by its share of the maximum (≥80% green, ≥60% blue, ≥40% yellow, ≥20% orange, below red). The Factores, Sinais, Qualidade do Dividendo and Fundamentais blocks above them come from `quality`, not from the thesis.
 
 Conventions used so far:
 - Text is in European Portuguese. Numbers in strings use a decimal comma (`$2,12`, `2,41%`). Numeric fields (`price`, `yield`, `history`) use JSON numbers with a decimal point.
