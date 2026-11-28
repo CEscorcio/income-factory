@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.31';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.32';</script>
 <meta name="theme-color" content="#0a0a0b">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2140,7 +2140,7 @@ function DividendDatesButton({pos,cfg,setCfg}){
       (left>0?(limited?` Faltam ${left}: o Alpha Vantage atingiu o limite diário, tenta amanhã.`:` Faltam ${left}: carrega outra vez (máx. 20 por vez; o plano grátis permite 25 pedidos por dia).`):'')+
       (errorMsg&&!limited?' '+errorMsg:'')});
   };
-  return h('div',{style:{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',margin:'4px 0 10px'}},
+  return h('div',{style:{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}},
     h('button',{className:'btn-secondary ml-0',style:{fontSize:12,padding:'5px 10px'},disabled:status&&status.loading,onClick:refresh,
       title:'Datas de pagamento e valores por acção das acções dos EUA (Alpha Vantage, até 20 tickers por vez)'},status&&status.loading?'…':'Actualizar datas'),
     status&&h('span',{style:{fontSize:12,color:status.error?'var(--red)':'var(--muted)'}},status.text));
@@ -8850,26 +8850,29 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
       const averageMonth=calendar.annualEUR/12;
       return h('div',{className:'card split-8'},
         h(Shdr,{title:'Calendário de Dividendos',hint:'Projeção anual distribuída pelos meses de pagamento'}),
-        h(DividendDatesButton,{pos,cfg,setCfg}),
+        // Button on the left, totals at the opposite (right) end of the same row.
+        h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:16,flexWrap:'wrap',margin:'4px 0 12px'}},
+          h(DividendDatesButton,{pos,cfg,setCfg}),
+          calendar.annualEUR>0&&h('div',{style:{display:'flex',gap:24,flexWrap:'wrap',alignItems:'baseline',textAlign:'right',marginLeft:'auto'}},
+            calendar.unassignedEUR>0&&h('div',{title:'Posições sem meses de pagamento configurados'},
+              h('div',{style:{fontSize:11,color:'var(--muted)',fontWeight:700,textTransform:'uppercase'}},'Sem mês definido'),
+              h('div',{style:{fontSize:14,fontWeight:700,color:'var(--tier-warn)'}},'€'+fn(calendar.unassignedEUR))
+            ),
+            h('div',null,
+              h('div',{style:{fontSize:11,color:'var(--muted)',fontWeight:700,textTransform:'uppercase'}},'Média mensal'),
+              h('div',{style:{fontSize:14,fontWeight:700,color:'var(--text)'}},'€'+fn(averageMonth))
+            ),
+            h('div',null,
+              h('div',{style:{fontSize:11,color:'var(--muted)',fontWeight:700,textTransform:'uppercase'}},'Total anual estimado'),
+              h('div',{style:{fontSize:21,fontWeight:800,color:'var(--gold)'}},'€'+fn(calendar.annualEUR))
+            )
+          )
+        ),
         calendar.annualEUR<=0
           ? h('div',{style:{padding:'16px 0',textAlign:'center',color:'var(--muted)',fontSize:13}},
               'Sem projeção disponível. Preenche o Yield % e os meses de pagamento das posições.')
           : h('div',{className:'cal-grid'},
               [
-                h('div',{key:'summary',style:{gridColumn:'1/-1',display:'flex',gap:20,flexWrap:'wrap',alignItems:'baseline',padding:'4px 2px 8px'}},
-                  h('div',null,
-                    h('div',{style:{fontSize:11,color:'var(--muted)',fontWeight:700,textTransform:'uppercase'}},'Total anual estimado'),
-                    h('div',{style:{fontSize:21,fontWeight:800,color:'var(--gold)'}},'€'+fn(calendar.annualEUR))
-                  ),
-                  h('div',null,
-                    h('div',{style:{fontSize:11,color:'var(--muted)',fontWeight:700,textTransform:'uppercase'}},'Média mensal'),
-                    h('div',{style:{fontSize:14,fontWeight:700,color:'var(--text)'}},'€'+fn(averageMonth))
-                  ),
-                  calendar.unassignedEUR>0&&h('div',{title:'Posições sem meses de pagamento configurados'},
-                    h('div',{style:{fontSize:11,color:'var(--muted)',fontWeight:700,textTransform:'uppercase'}},'Sem mês definido'),
-                    h('div',{style:{fontSize:14,fontWeight:700,color:'var(--tier-warn)'}},'€'+fn(calendar.unassignedEUR))
-                  )
-                ),
                 ...calendar.months.map(month=>h('div',{key:month.name,style:{background:'var(--s2)',border:'1px solid var(--border)',borderRadius:8,padding:'10px 12px',minHeight:118}},
                   h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:4}},
                     h('div',{style:{fontSize:12,fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--muted)'}},month.name),
