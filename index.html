@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.34';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.35';</script>
 <meta name="theme-color" content="#0a0a0b">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -4008,6 +4008,36 @@ class AppErrorBoundary extends React.Component{
       h('button',{className:'btn-primary',onClick:()=>location.reload()},'Recarregar'));
   }
 }
+// On import, a price already in the app that is newer than the one in the file wins:
+// re-importing an older export must not roll prices (and their date/source) back.
+function keepNewerPrices(imported,current){
+  const byT=new Map((current||[]).map(p=>[p.t,p]));
+  let kept=0;
+  const positions=(imported||[]).map(p=>{
+    const c=byT.get(p.t);
+    if(!c||!(c.cv>0)||!c.cvAsOf||(p.cvAsOf&&p.cvAsOf>=c.cvAsOf))return p;
+    kept++;
+    return{...p,cv:c.cv,cvAsOf:c.cvAsOf,...(c.cvSource?{cvSource:c.cvSource}:{})};
+  });
+  return{positions,kept};
+}
+function keepNewerConfigPrices(imported,current){
+  if(!imported||!current)return{config:imported,kept:0};
+  let kept=0;const config={...imported};
+  const refs={...(imported.refPrices||{})};
+  Object.entries(current.refPrices||{}).forEach(([t,c])=>{
+    const i=refs[t];
+    if(c&&c.cv>0&&c.asOf&&(!i||!i.asOf||c.asOf>i.asOf)){refs[t]=c;kept++;}
+  });
+  if(Object.keys(refs).length)config.refPrices=refs;
+  if(current.fxEurUsdAsOf&&(!imported.fxEurUsdAsOf||current.fxEurUsdAsOf>imported.fxEurUsdAsOf)){
+    config.fxEurUsd=current.fxEurUsd;config.fxEurUsdAsOf=current.fxEurUsdAsOf;kept++;
+  }
+  if(current.quotesImportedAt&&(!imported.quotesImportedAt||current.quotesImportedAt>imported.quotesImportedAt)){
+    config.quotesImportedAt=current.quotesImportedAt;config.quotesSource=current.quotesSource;
+  }
+  return{config,kept};
+}
 function App(){
   const[tab,setTab]=useState('dashboard');
   const[selectedTicker,setSelectedTicker]=useState(null);
@@ -4236,8 +4266,11 @@ function App(){
         if(d.legacyIncome){
           positions=mergeLegacyIncome(positions!==undefined?positions:(pos||[]),d.legacyIncome);
         }
+        let keptPrices=0;
+        if(positions!==undefined){const r=keepNewerPrices(positions,pos);positions=r.positions;keptPrices+=r.kept;}
         const quality=d.quality&&d.quality.map(item=>{const clean=cleanQuality(item);return{...clean,sc:calcScore(clean)};});
-        const config=d.config&&normalizeConfig(d.config);
+        let config=d.config&&normalizeConfig(d.config);
+        if(config){const r=keepNewerConfigPrices(config,cfg);config=r.config;keptPrices+=r.kept;}
         if(positions!==undefined)entries.push(['if_fp',JSON.stringify(positions)]);
         if(d.sold!==undefined)entries.push(['if_fs',JSON.stringify(d.sold)]);
         if(quality)entries.push(['if_fq',JSON.stringify(quality)]);
@@ -4258,13 +4291,13 @@ function App(){
         if(d.theses!==undefined)setTeses(d.theses);
         setNoData(false);
         const nActive=(positions||pos||[]).length,nSold=(d.sold||sold||[]).length;
-        notify((full?'Dados importados':'Ficheiros antigos importados')+` — ${nActive} activas · ${nSold} fechadas.`+(restoredKeys.length?` ${restoredKeys.length} chave${restoredKeys.length===1?'':'s'} API restaurada${restoredKeys.length===1?'':'s'}.`:'')+(full?'':' Exporta agora para criar o teu income-factory.json.'));
+        notify((full?'Dados importados':'Ficheiros antigos importados')+` — ${nActive} activas · ${nSold} fechadas.`+(keptPrices?` ${keptPrices} preço${keptPrices===1?'':'s'} mais recente${keptPrices===1?'':'s'} da app mantido${keptPrices===1?'':'s'}.`:'')+(restoredKeys.length?` ${restoredKeys.length} chave${restoredKeys.length===1?'':'s'} API restaurada${restoredKeys.length===1?'':'s'}.`:'')+(full?'':' Exporta agora para criar o teu income-factory.json.'));
       }catch(error){
         console.error('data import failed',error);
         notify('Dados não importados: '+error.message);
       }
     });
-  },[pos,sold]);
+  },[pos,sold,cfg]);
   const importBrokerQuotes=useCallback(()=>{
     openFilePicker('.csv,text/csv',async file=>{
       try{
