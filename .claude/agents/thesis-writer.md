@@ -15,8 +15,8 @@ The page renders, in order:
 2. Moat
 3. Principal Risco
 4. Resposta Estratégica
-5. Balance Sheet
-6. Growth Thesis
+5. Growth Thesis
+6. Bull Case (`bullCase`, list: what goes better than expected; shown side by side with the Bear Case)
 7. Bear Case
 8. O Que Destruiria a Tese
 9. Valuation

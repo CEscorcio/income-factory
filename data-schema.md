@@ -130,15 +130,15 @@ Keys written by the price and exchange-rate updates:
 | Key | Notes |
 |---|---|
 | `fxEurUsd`, `fxEurUsdAsOf` | EUR/USD rate and its date. The **BCE** button fills them with the European Central Bank reference rate and also adds that day to `fxHistory.rates`. |
-| `priceProvider` | Last provider used in "Cotações online": `twelvedata`, `alphavantage`, `finnhub` or `yahoo`. |
+| `priceProvider` | Last provider used in "Cotações online": `twelvedata`, `alphavantage` or `finnhub`. |
 | `priceFallback` | Provider tried for the tickers the main one can't price (same values, or `""` for none). Default `alphavantage`. |
-| `priceFallback2` | Provider tried last, for the tickers still without a price (same values, or `""` for none). Default `yahoo`. |
+| `priceFallback2` | Provider tried last, for the tickers still without a price (same values, or `""` for none). Default `finnhub`. |
 | `priceSymbols` | `{ "<ticker>": "<symbol>" }` overrides for tickers the provider knows by another symbol, e.g. `{ "LGEN": "LGEN.L" }`. Format `TICKER` (US) or `TICKER.EXCHANGE` with `L`, `AS`, `LS`, `MI`, `DE`, `F`, `BE`, `PA`, `MC`, `CO`. |
 | `quotesImportedAt`, `quotesSource` | When prices were last updated, and from where. |
 | `refPrices` | `{ "<ticker>": { "cv": number, "asOf": date, "source": string } }`: prices for tickers held outside the portfolio (e.g. an ETF in a `wealth.<owner>Investimentos` section), in EUR. Used when no active position has that ticker; updated by Cotações online. |
 | `fxHistory` | `{ unit, source, asOf, rates: { "YYYY-MM-DD": USD per 1 EUR } }`. Filled by the **BCE** button with ECB reference rates from the first transaction to today. The Tax page converts each sale at its date and each lot's cost at its purchase date; dividends at the year's average rate. |
 | `benchmarkCache` | `{ sp500:{byYear,source}, msciWorld:{byYear,source}, asOf }`. Yearly total returns (`"2026 YTD"` for the current year). **Actualizar (SPY, URTH)** computes them from Alpha Vantage monthly adjusted closes. |
-| `dividendEvents` | `{ "<ticker>": { fetchedAt, events:[ { ex, pay, amount } ] } }`: real dividend dates and amount per share (US listings, Alpha Vantage). Used by the monthly dividend map and the dividend calendar; refreshed with **Actualizar datas** on the Dividends page. |
+| `dividendEvents` | `{ "<ticker>": { fetchedAt, events:[ { ex, pay, amount } ] } }`: real dividend dates and amount per share (US listings, Alpha Vantage). Used by the dividend calendar; refreshed with **Actualizar datas** in the Calendário de Dividendos card (Dividends page). |
 
 API keys are **not** part of `config`. They live in the browser and go into the file only in the optional `secrets` section below.
 
@@ -224,8 +224,8 @@ Currently written: JPM, PEP, PG, MAIN, O, KO, XOM, TROW, COR.LS, DG.PA, NOV.DE, 
   "strategicResponse": ["…"],
   "financialsYears": ["2023", "2024", "2025"],
   "financials": [ { "metric": "Revenue", "values": ["$45,75B", "$46,50B", "$47,20B"] } ],   // one value per year
-  "balanceSheet": "text",
   "growthThesis": "text",
+  "bullCase": ["…"],
   "bearCase": ["…"],
   "whatWouldBreakThesis": ["…"],
   "valuation": [ { "scenario": "Bear|Base|Bull", "eps": "$2,70", "pe": "22x", "fairValue": "$59" } ],
@@ -251,7 +251,7 @@ Currently written: JPM, PEP, PG, MAIN, O, KO, XOM, TROW, COR.LS, DG.PA, NOV.DE, 
 }
 ```
 
-Section order on the Teses page: 1 Tese · 2 Moat · 3 Principal Risco · 4 Resposta Estratégica · 5 Balance Sheet · 6 Growth Thesis · 7 Bear Case · 8 O Que Destruiria a Tese · 9 Valuation · 10 Decisão Final. `financials` (with `financialsYears`) is shown as a **Financial Quality** table under the Qualidade do Dividendo card. The `scorecard` (with `scorecardTotal`) is shown inside the **Fundamentais & Scorecard** card near the top, each score coloured by its share of the maximum (≥80% green, ≥60% blue, ≥40% yellow, ≥20% orange, below red). The Factores, Sinais, Qualidade do Dividendo and Fundamentais blocks above them come from `quality`, not from the thesis.
+Section order on the Teses page: 1 Tese · 2 Moat · 3 Principal Risco · 4 Resposta Estratégica · 5 Growth Thesis · 6 Bull Case and 7 Bear Case (side by side) · 8 O Que Destruiria a Tese · 9 Valuation · 10 Decisão Final. `financials` (with `financialsYears`) is shown as a **Financial Quality** table under the Qualidade do Dividendo card. The `scorecard` (with `scorecardTotal`) is shown inside the **Fundamentais & Scorecard** card near the top, each score coloured by its share of the maximum (≥80% green, ≥60% blue, ≥40% yellow, ≥20% orange, below red). The Factores, Sinais, Qualidade do Dividendo and Fundamentais blocks above them come from `quality`, not from the thesis.
 
 Conventions used so far:
 - Text is in European Portuguese. Numbers in strings use a decimal comma (`$2,12`, `2,41%`). Numeric fields (`price`, `yield`, `history`) use JSON numbers with a decimal point.
@@ -280,7 +280,7 @@ Written only when **Incluir as chaves no income-factory.json** is ticked in Conf
 { "priceKeys": { "twelvedata": "…", "alphavantage": "…" } }
 ```
 
-Valid providers: `twelvedata`, `alphavantage`, `finnhub`, `yahoo` (for `yahoo` the value is the URL of your proxy, not a key). Anyone with a file that has this section can use your keys: keep it private and never commit it to the repository (the site is public).
+Valid providers: `twelvedata`, `alphavantage`, `finnhub`. Anyone with a file that has this section can use your keys: keep it private and never commit it to the repository (the site is public).
 
 ---
 
