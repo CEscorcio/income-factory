@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.10';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.11';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2846,7 +2846,7 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
 
   /* Withholding tax rates by country flag — wraps the shared top-level
      whtRateForCountry, which reads cfg.whtByCountry (the same source of truth
-     shown on the "Withholding Tax por País" card and used by Analytics). */
+     shown in the "Reembolso Dupla Tributação — por país" table and used by Analytics). */
   const whtRateFor=country=>whtRateForCountry(cfg,country);
 
   /* Build ticker -> country map: p.country takes priority, then cfg.posCountry */
@@ -2975,7 +2975,7 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
       c.tickers.add(r.ticker);
     });
     return Object.entries(byC)
-      .map(([flag,v])=>({flag,name:(cfg?.whtByCountry||{})[flag]?.name||flag,...v,tickers:[...v.tickers].sort()}))
+      .map(([flag,v])=>({flag,name:(cfg?.whtByCountry||{})[flag]?.name||flag,domestic:domesticWhtRate(cfg,flag),...v,tickers:[...v.tickers].sort()}))
       .sort((a,b)=>b.withheld-a.withheld);
   },[divRows,cfg]);
 
@@ -3455,7 +3455,7 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
       h('div',{style:{overflowX:'auto'}},
         h('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:12}},
           h('thead',null,h('tr',{className:'border-b border-[var(--border)]'},
-            ['País','Ticker(s)','Taxa tratado','Dividendo bruto','Retido (reembolso)'].map(x=>
+            ['País','Ticker(s)','Taxa original','Taxa tratado','Dividendo bruto','Retido (reembolso)'].map(x=>
               h('th',{key:x,className:x==='País'||x==='Ticker(s)'?'text-left':'text-right',
                 style:{padding:'6px 8px',color:'var(--muted)',fontWeight:600,fontSize:10,textTransform:'uppercase'}},x)
             )
@@ -3464,6 +3464,7 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
             reembolsoByCountry.map(c=>h('tr',{key:c.flag,className:'border-b',style:{borderColor:'var(--s2)'}},
               h('td',{style:{padding:'8px 8px'}},h('span',{style:{fontSize:18,marginRight:6}},c.flag),c.name),
               h('td',{style:{padding:'8px 8px',fontSize:10,color:'var(--muted)'}},c.tickers.join(' · ')),
+              h('td',{style:{padding:'8px 8px',textAlign:'right',color:'var(--muted)'},title:'Taxa de retenção na fonte sem tratado (lei do país)'},c.domestic!=null?fpc(c.domestic):'—'),
               h('td',{style:{padding:'8px 8px',textAlign:'right'}},fpc(c.rate)),
               h('td',{style:{padding:'8px 8px',textAlign:'right',fontFamily:'var(--mono)'}},fe(c.grossEUR)),
               h('td',{style:{padding:'8px 8px',textAlign:'right',fontFamily:'var(--mono)',fontWeight:700,
@@ -3472,7 +3473,7 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
             )),
             h('tr',{style:{borderTop:'2px solid var(--border)'}},
               h('td',{style:{padding:'8px 8px',fontWeight:700},colSpan:2},'TOTAL'),
-              h('td'),
+              h('td'),h('td'),
               h('td',{style:{padding:'8px 8px',textAlign:'right',fontFamily:'var(--mono)',fontWeight:700}},fe(divTotal.grossEUR)),
               h('td',{style:{padding:'8px 8px',textAlign:'right',fontFamily:'var(--mono)',fontWeight:700,color:'var(--green)'}},'+'+fe(divTotal.withheld)),
             )
@@ -3484,7 +3485,7 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
     h('div',{className:'tax-split mt-6'},
       /* Left: Imposto Pago por Ano (8 colunas) */
       h('div',{className:'tax-split-main'},h(TaxPaidByYear,{pos,sold,income,wealth,cfg})),
-      /* Right: Redução por Período de Detenção + Withholding Tax por País (4 colunas) */
+      /* Right: Redução por Período de Detenção (4 colunas) */
       h('div',{className:'tax-split-side'},
 
       /* Redução por Período de Detenção - CIRS Art. 43º */
@@ -3544,41 +3545,6 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
               '')
           );
         })()
-      ),
-
-      /* Withholding Tax por País */
-      h('div',{className:'card-sm'},
-        h(Shdr,{title:'Withholding Tax por País'}),
-        h('div',{style:{overflowX:'auto'}},
-        h('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:12}},
-          h('thead',null,h('tr',{className:'border-b border-[var(--border)]'},
-            ['País','Ticker(s)','Taxa Original','WHT c/ Tratado'].map(x=>h('th',{key:x,style:{padding:'6px 8px',textAlign:['Taxa Original','WHT c/ Tratado'].includes(x)?'center':'left',color:'var(--muted)',fontSize:10,fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase'}},x))
-          )),
-          h('tbody',null,
-            (()=>{
-              const byCountry=(pos||[]).reduce((a,p)=>{
-                const flag=p.country||(cfg?.posCountry||{})[p.t]||'🌐';
-                return {...a,[flag]:[...(a[flag]||[]),p.t]};
-              },{});
-              const rows=Object.entries(byCountry).sort((a,b)=>a[0].localeCompare(b[0]));
-              return rows.map(([flag,tickers])=>{
-                const whtNum=whtRateFor(flag);
-                const whtPct=(whtNum*100).toFixed(0)+'%';
-                const whtColor=whtNum===0?'var(--green)':whtNum<=0.10?'var(--blue)':whtNum<=0.15?'var(--gold)':'var(--red)';
-                const domestic=WHT_DOMESTIC[flag]||'—';
-                return h('tr',{key:flag,className:'border-b border-[var(--border)]'},
-                  h('td',null,
-                    h('span',{style:{fontSize:22}},flag)
-                  ),
-                  h('td',{className:'text-[10px] text-[var(--muted)]'},tickers.join(' · ')),
-                  h('td',{style:{textAlign:'center',color:'var(--muted)'}},domestic),
-                  h('td',{style:{textAlign:'center',color:whtColor}},whtPct)
-                );
-              });
-            })()
-          )
-        )
-        ),
       ),
 
       ), /* close tax-split-side */
@@ -7407,18 +7373,12 @@ function Income({pos,setPos,income,qual,setQual,sold,cfg,initialTab}){
   );
 }
 
-const WHT_DOMESTIC={
-  '🇺🇸':'30%',  // US statutory WHT on dividends to foreign investors
-  '🇬🇧':'0%',   // UK: no WHT on dividends (domestic law)
-  '🇳🇱':'15%',  // Netherlands: 15% domestic WHT
-  '🇵🇹':'35%',  // Portugal domestic rate (per user request)
-  '🇫🇷':'30%',  // France: 30% domestic WHT (prélèvement forfaitaire unique)
-  '🇩🇪':'26.375%', // Germany: 26.375% (25% + solidarity 5.5%)
-  '🇩🇰':'27%',  // Denmark: 27% domestic WHT
-  '🇪🇸':'19%',  // Spain: 19% domestic WHT
-  '🇮🇪':'0%',   // Ireland: 0% on distributions to non-residents (ETF domicile)
-  '🇱🇺':'15%',  // Luxembourg: 15% domestic WHT
-};
+// Statutory (no-treaty) withholding rate for a country flag: cfg.whtByCountry[flag].domestic,
+// else DCFG's table. null when unknown.
+function domesticWhtRate(cfg,flag){
+  const v=((cfg&&cfg.whtByCountry)||{})[flag]?.domestic??DCFG.whtByCountry[flag]?.domestic;
+  return Number.isFinite(v)?v:null;
+}
 
 // ── Shared slider control ──────────────────────────────────────────────────
 function Slider({label,value,set,min,max,step,color,fmt}){
