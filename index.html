@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.28';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.29';</script>
 <meta name="theme-color" content="#0a0a0b">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -8980,17 +8980,6 @@ function TesesRow(label,value){
     h('span',{style:{fontWeight:600,textAlign:'right'}},value==null||value===''?'—':value)
   );
 }
-function TesesTable(headers,rows){
-  if(!rows||!rows.length)return h('div',{style:{fontSize:12,color:'var(--muted)',fontStyle:'italic',padding:'8px 0'}},'Sem dados');
-  return h('div',{className:'card-table overflow-x-auto',style:{marginTop:8}},
-    h('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:13}},
-      h('thead',null,h('tr',null,headers.map((hd,i)=>h('th',{key:i,className:i===0?'text-left':'text-right',style:{padding:'6px 8px'}},hd)))),
-      h('tbody',null,rows.map((r,i)=>h('tr',{key:i,className:'border-t',style:{borderColor:'var(--s2)'}},
-        r.map((c,j)=>h('td',{key:j,className:j===0?'text-left':'text-right',style:{padding:'6px 8px'}},c==null||c===''?'—':c))
-      )))
-    )
-  );
-}
 // Thesis scorecard ("x / max" strings), coloured like the Quality Score legend:
 // ≥80% green · ≥60% blue · ≥40% yellow · ≥20% orange · below red.
 function parseScore(text){
@@ -9290,12 +9279,7 @@ function TesesPage({pos,teses,qual}){
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'9. Valuation'}),
-        TesesTable(['Cenário','EPS','P/E','Fair Value'],(t.valuation||[]).map(r=>[r.scenario,r.eps,r.pe,r.fairValue]))
-      ),
-
-      h('div',{className:'card mb-4'},
-        h(Shdr,{title:'10. Decisão Final'}),
+        h(Shdr,{title:'9. Decisão Final'}),
         h('div',{style:{marginTop:8}},
           TesesRow('Rating',t.finalDecision?.rating),
           TesesRow('Fair value',t.finalDecision?.fairValue),

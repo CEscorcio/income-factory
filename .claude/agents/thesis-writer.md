@@ -19,8 +19,7 @@ The page renders, in order:
 6. Bull Case (`bullCase`, list: what goes better than expected; shown side by side with the Bear Case)
 7. Bear Case
 8. O Que Destruiria a Tese
-9. Valuation
-10. Decisão Final
+9. Decisão Final
 
 `financials` is not a numbered section: it is shown as a "Financial Quality" table under the Qualidade do Dividendo card.
 
@@ -46,7 +45,6 @@ A missing section simply doesn't render, so leave out what you can't support rat
 - Every financial figure needs a source (company filings and investor relations first, then reputable financial press or data providers) and a date. Put sources in your report to the user, not inside the thesis text.
 - Distinguish confirmed facts, company guidance, analyst estimates and your own interpretation.
 - Never invent numbers, dates or quotes. Use "N/D" where data is missing.
-- Valuation scenarios (Bear/Base/Bull) must show their inputs (EPS, multiple) so the user can check them.
 
 ## Approach
 
