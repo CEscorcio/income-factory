@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.18';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.19';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -8552,8 +8552,7 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
 
 
   return h('div',null,
-    /* ── Top 3 cards: Total Dividends · Avg Yield · Posições c/ Dividendo ── */
-    /* (Avg Yield and Posições computed inline here; full KPI row below is trimmed) */
+    /* ── Top cards: Total Dividends · Avg Yield · Div CAGR 1Y / 3Y / 5Y ── */
     (()=>{
       const divStocks2=stocks.filter(p=>getQual(qualMap,p.t)?.dy>0&&p.n>0&&p.cv>0&&getAv(p)>0);
       const totDiv2=divStocks2.reduce((s,p)=>s+((getQual(qualMap,p.t)?.dy||0)*p.cv*p.n),0);
@@ -8581,6 +8580,8 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
       const latestV=totByY(latestY);
       const cagr1=prev1Y&&totByY(prev1Y)>0?(latestV/totByY(prev1Y))-1:null;
       const cagr3=prev3Yr&&totByY(prev3Yr)>0?Math.pow(latestV/totByY(prev3Yr),1/3)-1:null;
+      const prev5Yr=YEARS[YEARS.indexOf(latestY)+5]||null;
+      const cagr5=prev5Yr&&totByY(prev5Yr)>0?Math.pow(latestV/totByY(prev5Yr),1/5)-1:null;
       return h('div',{className:'grid-1-6 mb-4'},
         /* Total Dividends Received */
         h('div',{className:'gcol-span-2',style:{background:'var(--surface)',border:'1px solid var(--border)',
@@ -8599,18 +8600,10 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
         ),
         /* Avg Yield */
         h(Kpi,{label:'Avg Yield',value:fp(avgYld2),accent:'bl',sub:'Yield on Cost: '+fp(avgYoc2)}),
-        /* Posições c/ Dividendo */
-        h(Kpi,{label:'Posições c/ Dividendo',value:String(stocks.length),accent:'bl',sub:stocksUSD_div.length+' USD · '+stocksEUR_div.length+' EUR/ETF'}),
-        /* 1Y CAGR */
-        h(Kpi,{label:'1Y Div CAGR',
-          value:cagr1!=null?(cagr1>=0?'+':'')+fp(cagr1):'—',
-          accent:'bl',
-          sub:prev1Y?latestY+' vs '+prev1Y:'Dados insuficientes'}),
-        /* 3Y CAGR */
-        h(Kpi,{label:'3Y Div CAGR',
-          value:cagr3!=null?(cagr3>=0?'+':'')+fp(cagr3):'—',
-          accent:'bl',
-          sub:prev3Yr?latestY+' vs '+prev3Yr:'Dados insuficientes'}),
+        /* Dividend CAGR, 1Y · 3Y · 5Y (fp already adds the sign) */
+        ...[['1Y',cagr1,prev1Y],['3Y',cagr3,prev3Yr],['5Y',cagr5,prev5Yr]].map(([k,v,base])=>
+          h(Kpi,{key:k,label:k+' Div CAGR',value:v!=null?fp(v):'—',accent:'bl',
+            sub:!base?'Dados insuficientes':v!=null?latestY+' vs '+base:'Sem dividendos registados em '+base})),
       );
     })(),
 
