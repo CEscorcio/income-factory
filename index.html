@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.35';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.36';</script>
 <meta name="theme-color" content="#0a0a0b">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -46,6 +46,7 @@
   --muted:#9a9aa3;--green:#10b981;--red:#f43f5e;--gold:#10b981;
   --blue:#2dd4bf;--orange:#10b981;--mono:'JetBrains Mono',monospace;
   --text:#f4f4f5;--accent:#10b981;--accent-ink:#04130d;
+  --proj:#a78bfa; /* projections (next-year estimate bars), distinct from actuals */
   /* Named aliases for the 4-tier quality-metric scale (red→tier-warn→tier-ok→green)
      used across ~60 spots (scoreColor, sc2col, py/eps/debt/fcf/revgr/opmar colors,
      legends). Same hex as before — this only gives them a name so future edits
@@ -7022,11 +7023,12 @@ const BarChart=memo(function BarChart({tots,color,label,sm,estTotal,growth}){
     h('div',{style:{display:'flex',gap:6,alignItems:'flex-end',height:176}},
       nextEst>0&&h('div',{key:'next',title:'Previsão: estimativa de '+CUR_YEAR+' × (1 + crescimento do dividendo de '+((growth-1)*100).toFixed(1)+'%, em Config)',
         style:{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:5}},
-        h('div',{style:{fontSize:11,fontWeight:700,color:'var(--green)'}},'+'+((growth-1)*100).toFixed(0)+'%'),
-        h('div',{style:{fontSize:11,color:'var(--muted)'}},'est. '+sm+fn(nextEst,0)),
+        // Projection: its own colour (--proj) so it never reads as money already received.
+        h('div',{style:{fontSize:11,fontWeight:700,color:'var(--proj)'}},'+'+((growth-1)*100).toFixed(0)+'%'),
+        h('div',{style:{fontSize:11,color:'var(--proj)'}},'est. '+sm+fn(nextEst,0)),
         h('div',{style:{width:'100%',height:Math.max(nextEst/maxV*100*0.92,2)+'px',borderRadius:'3px 3px 0 0',
-          background:hatch(color),border:'1px dashed '+color,opacity:.6}}),
-        h('div',{style:{fontSize:11,color:'var(--muted)'}},(CUR_YEAR+1)+' (prev.)')
+          background:hatch('rgba(167,139,250,.55)'),border:'1px dashed var(--proj)',boxSizing:'border-box'}}),
+        h('div',{style:{fontSize:11,color:'var(--proj)',fontWeight:600}},(CUR_YEAR+1)+' (prev.)')
       ),
       CHART_YEARS.map((y,i)=>{
         const val=tots[y]||0;
