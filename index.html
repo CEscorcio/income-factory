@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.8';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.9';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -115,9 +115,14 @@ a{color:var(--blue);text-decoration:none;}
 .swot-items{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px;margin-top:10px;}
 @media(max-width:700px){.swot{grid-template-columns:1fr;}.swot-head,.swot-side,.swot-corner{display:none;}.swot-items{grid-template-columns:1fr;}}
 /* Table whose header stays visible while its rows scroll (Quality Score) */
-.sticky-head{max-height:calc(100vh - 120px);overflow:auto !important;}
+/* Long tables grow with the page (no inner scroll); the header sticks under the top bar. */
+.sticky-head{overflow:visible !important;}
 .tall-head thead th{padding-top:24px;padding-bottom:24px;}
-.sticky-head thead th{position:sticky;top:0;z-index:2;background:var(--surface);box-shadow:inset 0 -1px 0 var(--border);}
+.sticky-head thead th{position:sticky;top:48px;z-index:2;background:var(--surface);box-shadow:inset 0 -1px 0 var(--border);}
+.sticky-head thead th:first-child{border-top-left-radius:10px;}
+.sticky-head thead th:last-child{border-top-right-radius:10px;}
+/* Narrow screens: the table scrolls sideways inside its card, so the header can't stick to the page. */
+@media(max-width:1100px){.sticky-head{overflow-x:auto !important;}.sticky-head thead th{position:static;}}
 .bar{
   display:flex;align-items:center;gap:8px;
   padding:0 12px;min-height:48px;
