@@ -13,17 +13,14 @@ In the user's `income-factory.json`, the `theses` object is keyed by ticker. Use
 The page renders, in order:
 1. Tese
 2. Moat
-3. Principal Risco
-4. Resposta Estratégica
-5. Growth Thesis
-6. Bull Case (`bullCase`, list: what goes better than expected; shown side by side with the Bear Case)
-7. Bear Case
-8. O Que Destruiria a Tese
-9. Decisão Final
+3. Bull Case (`bullCase`, list: what goes better than expected; shown side by side with the Bear Case)
+4. Bear Case
+5. O Que Destruiria a Tese
+6. Decisão Final
 
 `financials` is not a numbered section: it is shown as a "Financial Quality" table under the Qualidade do Dividendo card.
 
-The `swot` (4 items per quadrant: `{title, note}`, title of 2–4 words, note of one short sentence) is shown as an "Análise SWOT" matrix above the numbered sections; keep it consistent with the moat, main risk, bear case and growth thesis.
+The `swot` (4 items per quadrant: `{title, note}`, title of 2–4 words, note of one short sentence) is shown as an "Análise SWOT" matrix above the numbered sections; keep it consistent with the moat, bull case and bear case.
 
 The `scorecard` is not a numbered section: it is shown inside the "Fundamentais & Scorecard" card, next to the metrics from `quality`.
 
