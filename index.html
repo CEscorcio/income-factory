@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.48';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.49';</script>
 <meta name="theme-color" content="#0a0a0b">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -843,6 +843,8 @@ const DCFG={
   targetYield:0.045,
   divGrowth:0.03,
   portfolioGoal:50000,
+  // Owner of the main portfolio (stocks + ETFs) on Net Worth; set in Config.
+  portfolioOwner:'Eu',
   fxEurUsd:1.08,
   despesasItems:[],
   benchmarkCache:{
@@ -2203,9 +2205,11 @@ function PatrimonioPage({wealth,pos,cfg}){
   };
 
   /* ── Owner filter ───────────────────────────────────────────────────────── */
-  const ownerList=['Todos',...Object.keys(owners)];
+  // Owner of the main portfolio (Config → Dono da carteira); interest without an owner goes to them too.
+  const PORT_OWNER=(cfg?.portfolioOwner||'').trim()||'Eu';
+  const ownerList=['Todos',...new Set([...Object.keys(owners),PORT_OWNER])];
   const matchOwner=(o)=>ownerFilter==='Todos'||o===ownerFilter;
-  const jurosFiltered=juros.filter(r=>matchOwner(r.investidor||r.owner||'Carlos'));
+  const jurosFiltered=juros.filter(r=>matchOwner(r.investidor||r.owner||PORT_OWNER));
 
   /* ── Date helpers ────────────────────────────────────────────────────────── */
   const TODAY=new Date();
@@ -2248,7 +2252,7 @@ function PatrimonioPage({wealth,pos,cfg}){
     .map(w=>investmentsSummary(wealth?.[w.key]?.investimentos,pos,cfg))
     .reduce((a,b)=>({value:a.value+b.value,cost:a.cost+b.cost,pl:a.pl+b.pl}),{value:0,cost:0,pl:0});
 
-  /* ── Portfolio (Carlos) — Stocks vs ETFs, in EUR ────────────────────────── */
+  /* ── Portfolio (main owner) — Stocks vs ETFs, in EUR ────────────────────────── */
   const fxUsd=cfg?.fxEurUsd||1.08;
   const portLines=[
     {key:'stocks',label:'Stocks',color:'var(--green)',val:0,cost:0,count:0},
@@ -2260,7 +2264,7 @@ function PatrimonioPage({wealth,pos,cfg}){
     const line=portLines[p.cat==='ETF'?1:0];
     line.val+=c.val/fx;line.cost+=c.cost/fx;line.count++;
   });
-  const showPort=matchOwner('Carlos');
+  const showPort=matchOwner(PORT_OWNER);
   const portTotal=showPort?portLines[0].val+portLines[1].val:0;
   const portCost=showPort?portLines[0].cost+portLines[1].cost:0;
   const portPL=portTotal-portCost;
@@ -2308,7 +2312,7 @@ function PatrimonioPage({wealth,pos,cfg}){
             if(val)vals[w.owner]=(vals[w.owner]||0)+val;
           });
           const portAll=portLines[0].val+portLines[1].val;
-          if(portAll>0)vals['Carlos']=(vals['Carlos']||0)+portAll;
+          if(portAll>0)vals[PORT_OWNER]=(vals[PORT_OWNER]||0)+portAll;
           const entries=Object.entries(vals).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
           const tot=entries.reduce((s,[,v])=>s+v,0);
           return h('div',{style:{display:'flex',flexDirection:'column',gap:6}},
@@ -2357,11 +2361,11 @@ function PatrimonioPage({wealth,pos,cfg}){
       ];
       const alloc={};
       const add=(o,k,v)=>{if(!o||!v)return;alloc[o]=alloc[o]||{};alloc[o][k]=(alloc[o][k]||0)+v;};
-      portLines.forEach(l=>add('Carlos',l.key,l.val));
+      portLines.forEach(l=>add(PORT_OWNER,l.key,l.val));
       depositos.forEach(r=>add(r.investidor,'dep',r.valor||0));
       ppr.forEach(r=>add(r.owner,'ppr',(r.valorInvestido||0)+(r.ganhosBrutos||0)));
       aforro.forEach(r=>add(r.owner,'aforro',(Number(r.investimento)||0)+(r.juros||0)));
-      juros.forEach(r=>add(r.investidor||r.owner||'Carlos','juros',r.valor||0));
+      juros.forEach(r=>add(r.investidor||r.owner||PORT_OWNER,'juros',r.valor||0));
       wealthInvestments(wealth).forEach(w=>(wealth?.[w.key]?.investimentos||[]).forEach(r=>add(w.owner,'inv',investmentLot(r,pos,cfg).value)));
       const rows=Object.entries(alloc)
         .filter(([o])=>matchOwner(o))
@@ -2601,9 +2605,9 @@ function PatrimonioPage({wealth,pos,cfg}){
       );
     }),
 
-    /* ── Carlos Investimentos ─────────────────────────────────────────── */
+    /* ── Carteira (main portfolio) ─────────────────────────────────────────── */
     showPort&&portTotal>0&&h('div',{className:'mt-5 mb-8'},
-      h(Shdr,{title:'Carlos Investimentos'}),
+      h(Shdr,{title:'Carteira — Acções e ETFs'}),
       h('div',{className:'card-table overflow-x-auto'},
         h('table',null,
           TH('Owner','Tipo','Posições','Investido','Valor Atual','P&L €','P&L %','% Portfolio'),
@@ -2611,7 +2615,7 @@ function PatrimonioPage({wealth,pos,cfg}){
             const pl=l.val-l.cost;
             const plCol=pl>=0?'var(--green)':'var(--red)';
             return h('tr',{key:l.key},
-              h('td',null,ownerBadge('Carlos')),
+              h('td',null,ownerBadge(PORT_OWNER)),
               h('td',{className:'font-semibold'},
                 h('span',{style:{display:'inline-block',width:8,height:8,borderRadius:'50%',background:l.color,marginRight:7}}),l.label),
               h('td',{className:'mono-sm-muted'},l.count),
@@ -4624,10 +4628,11 @@ function App(){
     // ── Sheet 12: Net Worth Summary per Owner ─────────────────────────────
     const nwHeaders=row('Owner','Asset Type','Name','Investido','Valor Actual','Ganho','Retorno%');
     const nwRows=[];
-    const owners=Object.keys(wData.owners||{});
+    const portOwner=(cfg?.portfolioOwner||'').trim()||'Eu';
+    const owners=[...new Set([...Object.keys(wData.owners||{}),portOwner])];
     owners.forEach(owner=>{
-      // Portfolio (Carlos)
-      if(owner==='Carlos'){
+      // Main portfolio (its owner is set in Config)
+      if(owner===portOwner){
         const v=(pos||[]).reduce((s,p)=>s+(p.n||0)*(p.cv||0),0);
         const c=(pos||[]).reduce((s,p)=>s+(p.n||0)*getAv(p),0);
         nwRows.push(row(owner,'Portfolio','Folio',c.toFixed(2),v.toFixed(2),(v-c).toFixed(2),pct((v-c)/c)));
@@ -6249,6 +6254,20 @@ function Conf({wealth,cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onR
             }),
             h('span',{className:'text-xs text-[var(--muted)]'},'€')
           )
+        ),
+        h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',
+          padding:'10px 12px',background:'var(--surface)',borderRadius:6,border:'1px solid var(--border)'}},
+          h('div',null,
+            h('div',{style:{fontSize:13,fontWeight:700,color:'var(--text)',whiteSpace:'nowrap'}},'Dono da carteira'),
+            h('div',{style:{fontSize:11,color:'var(--muted)',marginTop:2}},'Nome usado em Net Worth para a carteira principal'),
+          ),
+          h('input',{
+            className:'ed',
+            style:{width:110,textAlign:'right',color:'var(--text)',fontSize:13,fontWeight:700,fontFamily:'inherit'},
+            defaultValue:cfg?.portfolioOwner||'Eu',maxLength:24,
+            onBlur:e=>{const v=e.target.value.trim();if(v)setCfg(c=>({...c,portfolioOwner:v}));else e.target.value=cfg?.portfolioOwner||'Eu';},
+            onKeyDown:e=>e.key==='Enter'&&e.target.blur(),
+          })
         ),
 
         /* Tax Rate */
