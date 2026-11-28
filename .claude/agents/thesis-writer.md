@@ -15,12 +15,11 @@ The page renders, in order:
 2. Moat
 3. Principal Risco
 4. Resposta Estratégica
-5. Balance Sheet
-6. Growth Thesis
-7. Bear Case
-8. O Que Destruiria a Tese
-9. Valuation
-10. Decisão Final
+5. Growth Thesis
+6. Bear Case
+7. O Que Destruiria a Tese
+8. Valuation
+9. Decisão Final
 
 `financials` is not a numbered section: it is shown as a "Financial Quality" table under the Qualidade do Dividendo card.
 

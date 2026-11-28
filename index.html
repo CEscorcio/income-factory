@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.14';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.15';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -9252,32 +9252,27 @@ function TesesPage({pos,teses,qual}){
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'5. Balance Sheet'}),
-        h('p',{style:{fontSize:13,lineHeight:1.6,marginTop:8,whiteSpace:'pre-wrap'}},t.balanceSheet||'Por preencher.')
-      ),
-
-      h('div',{className:'card mb-4'},
-        h(Shdr,{title:'6. Growth Thesis'}),
+        h(Shdr,{title:'5. Growth Thesis'}),
         h('p',{style:{fontSize:13,lineHeight:1.6,marginTop:8,whiteSpace:'pre-wrap'}},t.growthThesis||'Por preencher.')
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'7. Bear Case'}),
+        h(Shdr,{title:'6. Bear Case'}),
         h('div',{style:{marginTop:8}},TesesList(t.bearCase,'var(--red)'))
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'8. O Que Destruiria a Tese?'}),
+        h(Shdr,{title:'7. O Que Destruiria a Tese?'}),
         h('div',{style:{marginTop:8}},TesesList(t.whatWouldBreakThesis,'var(--red)'))
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'9. Valuation'}),
+        h(Shdr,{title:'8. Valuation'}),
         TesesTable(['Cenário','EPS','P/E','Fair Value'],(t.valuation||[]).map(r=>[r.scenario,r.eps,r.pe,r.fairValue]))
       ),
 
       h('div',{className:'card mb-4'},
-        h(Shdr,{title:'10. Decisão Final'}),
+        h(Shdr,{title:'9. Decisão Final'}),
         h('div',{style:{marginTop:8}},
           TesesRow('Rating',t.finalDecision?.rating),
           TesesRow('Fair value',t.finalDecision?.fairValue),
