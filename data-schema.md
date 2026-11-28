@@ -225,6 +225,7 @@ Currently written: JPM, PEP, PG, MAIN, O, KO, XOM, TROW, COR.LS, DG.PA, NOV.DE, 
   "financialsYears": ["2023", "2024", "2025"],
   "financials": [ { "metric": "Revenue", "values": ["$45,75B", "$46,50B", "$47,20B"] } ],   // one value per year
   "growthThesis": "text",
+  "bullCase": ["…"],
   "bearCase": ["…"],
   "whatWouldBreakThesis": ["…"],
   "valuation": [ { "scenario": "Bear|Base|Bull", "eps": "$2,70", "pe": "22x", "fairValue": "$59" } ],
@@ -250,7 +251,7 @@ Currently written: JPM, PEP, PG, MAIN, O, KO, XOM, TROW, COR.LS, DG.PA, NOV.DE, 
 }
 ```
 
-Section order on the Teses page: 1 Tese · 2 Moat · 3 Principal Risco · 4 Resposta Estratégica · 5 Growth Thesis · 6 Bear Case · 7 O Que Destruiria a Tese · 8 Valuation · 9 Decisão Final. `financials` (with `financialsYears`) is shown as a **Financial Quality** table under the Qualidade do Dividendo card. The `scorecard` (with `scorecardTotal`) is shown inside the **Fundamentais & Scorecard** card near the top, each score coloured by its share of the maximum (≥80% green, ≥60% blue, ≥40% yellow, ≥20% orange, below red). The Factores, Sinais, Qualidade do Dividendo and Fundamentais blocks above them come from `quality`, not from the thesis.
+Section order on the Teses page: 1 Tese · 2 Moat · 3 Principal Risco · 4 Resposta Estratégica · 5 Growth Thesis · 6 Bull Case and 7 Bear Case (side by side) · 8 O Que Destruiria a Tese · 9 Valuation · 10 Decisão Final. `financials` (with `financialsYears`) is shown as a **Financial Quality** table under the Qualidade do Dividendo card. The `scorecard` (with `scorecardTotal`) is shown inside the **Fundamentais & Scorecard** card near the top, each score coloured by its share of the maximum (≥80% green, ≥60% blue, ≥40% yellow, ≥20% orange, below red). The Factores, Sinais, Qualidade do Dividendo and Fundamentais blocks above them come from `quality`, not from the thesis.
 
 Conventions used so far:
 - Text is in European Portuguese. Numbers in strings use a decimal comma (`$2,12`, `2,41%`). Numeric fields (`price`, `yield`, `history`) use JSON numbers with a decimal point.
