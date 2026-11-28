@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.25';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.26';</script>
 <meta name="theme-color" content="#0a0a0b">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -8746,20 +8746,18 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
           h('table',null,
             h('thead',null,h('tr',null,
               h('th',{className:'text-left'},'Ticker'),
-              h('th',{style:{color:'var(--muted)',fontStyle:'italic',fontSize:13,whiteSpace:'nowrap'}},'Est. '+new Date().getFullYear()),
               ...DISP_YEARS.map(y=>h('th',{key:y,style:{color:y===CUR_YEAR?'var(--gold)':'inherit'}},y)),
               h('th',null,'Total'),
             )),
             /* USD sold */
             soldWithDivUSD.length>0&&h('tbody',null,
               h('tr',{style:{background:'#18181b'}},
-                h('td',{colSpan:DISP_YEARS.length+3,style:{fontSize:13,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--blue)'}},'[ VENDIDAS USD ]')
+                h('td',{colSpan:DISP_YEARS.length+2,style:{fontSize:13,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--blue)'}},'[ VENDIDAS USD ]')
               ),
               ...soldWithDivUSD.map(p=>{
                 const tot=getSoldDivTotal(p);
                 return h('tr',{key:p.t},
                   h('td',null,h(TickerLink,{t:p.t,className:'font-semibold'})),
-                  h('td',{className:'mono-sm-italic'},'—'),
                   ...DISP_YEARS.map(y=>{
                     const inPeriod=p.divByYear&&y in p.divByYear;
                     const v=getSoldDivByYear_dp(p,y);
@@ -8771,7 +8769,6 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
               }),
               h('tr',{className:'bg-[var(--s2)]'},
                 h('td',null,h('span',{style:{fontWeight:600,color:'var(--blue)',fontSize:14}},'$ TOTAL')),
-                h('td',{className:'mono-sm-italic'},'—'),
                 ...DISP_YEARS.map(y=>h('td',{key:y,style:{fontWeight:600,color:y===CUR_YEAR?'var(--gold)':'var(--text)'}},
                   totSoldUSD_dp[y]>0?'$'+fn(totSoldUSD_dp[y]):'—')),
                 h('td',{className:'font-bold text-[var(--green)]'},totSoldUSD_dp.total>0?'$'+fn(totSoldUSD_dp.total):'—'),
@@ -8780,13 +8777,12 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
             /* EUR sold */
             soldWithDivEUR.length>0&&h('tbody',null,
               h('tr',{style:{background:'#0a1f16'}},
-                h('td',{colSpan:DISP_YEARS.length+3,style:{fontSize:13,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--green)'}},'[ VENDIDAS EUR ]')
+                h('td',{colSpan:DISP_YEARS.length+2,style:{fontSize:13,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--green)'}},'[ VENDIDAS EUR ]')
               ),
               ...soldWithDivEUR.map(p=>{
                 const tot=getSoldDivTotal(p);
                 return h('tr',{key:p.t},
                   h('td',null,h(TickerLink,{t:p.t,className:'font-semibold'})),
-                  h('td',{className:'mono-sm-italic'},'—'),
                   ...DISP_YEARS.map(y=>{
                     const inPeriod=p.divByYear&&y in p.divByYear;
                     const v=getSoldDivByYear_dp(p,y);
@@ -8798,7 +8794,6 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
               }),
               h('tr',{className:'bg-[var(--s2)]'},
                 h('td',null,h('span',{style:{fontWeight:600,color:'var(--green)',fontSize:14}},'€ TOTAL')),
-                h('td',{className:'mono-sm-italic'},'—'),
                 ...DISP_YEARS.map(y=>h('td',{key:y,style:{fontWeight:600,color:y===CUR_YEAR?'var(--gold)':'var(--text)'}},
                   totSoldEUR_dp[y]>0?'€'+fn(totSoldEUR_dp[y]):'—')),
                 h('td',{className:'font-bold text-[var(--green)]'},totSoldEUR_dp.total>0?'€'+fn(totSoldEUR_dp.total):'—'),

@@ -1,5 +1,5 @@
 // Mude a versão (e window.APP_RELEASE no index.html) sempre que publicar uma alteração.
-const CACHE = 'income-factory-2026-11-28.25';
+const CACHE = 'income-factory-2026-11-28.26';
 const ASSETS = [
   './',
   'index.html',
