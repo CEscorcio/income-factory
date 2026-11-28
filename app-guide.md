@@ -12,7 +12,7 @@ Single-file React app (`index.html`), installable as a PWA. Data lives in the br
 | **Transactions** | Full buy/sell log, with a Broker column. This is the source of truth for shares and average cost. |
 | **Analytics** | Allocation pies (asset, stock/ETF, currency, country, sector, broker), benchmarks and the **Dividend Snowball Projection**. |
 | **Teses** | Written investment thesis per active position, plus Factores / Sinais / Qualidade do Dividendo / Fundamentais blocks. |
-| **Net Worth** (`patrimonio`) | PPR, Certificados de Aforro, term deposits, interest and the Claudia/Carlos investments, by owner. |
+| **Net Worth** (`patrimonio`) | PPR, Certificados de Aforro, term deposits, interest and the investments held outside the portfolio (`<owner>Investimentos` sections), by owner. |
 | **Tax** | Capital Gains (FIFO), Dividend Tax, Juros, Tax Harvesting, double-taxation refund, holding-period reduction, withholding by country, tax paid per year. |
 | **Config** | Tax rate, monthly capital, target yield, expenses, WHT-by-country table, EUR/USD (with the **BCE** button), **Cotações online**, broker CSV, import/export of `income-factory.json`. |
 
@@ -133,7 +133,7 @@ real(y)   = nominal(y) / (1+inflation)^y
   - **Cotações online** (Config): Twelve Data for US listings, Alpha Vantage as fallback for London, Xetra, Frankfurt, Amsterdam and Lisbon. Prices are converted to the position currency with ECB rates and reviewed before applying.
   - **Broker CSV** (Config): template download + import.
   - **By hand** in the Transactions page.
-- **Investments outside the portfolio** (Claudia Investimentos): their current price comes from an active position with the same ticker, otherwise from `cfg.refPrices`. Cotações online also fetches these tickers (marked "(ref.)") and stores the price there.
+- **Investments outside the portfolio** (`<owner>Investimentos` sections): their current price comes from an active position with the same ticker, otherwise from `cfg.refPrices`. Cotações online also fetches these tickers (marked "(ref.)") and stores the price there.
 - **Live vs not live**: a price is live when it came from an online provider and is at most 4 days old (`cvSource`, `cvAsOf`). Every other price shows an amber ● in Holdings and Transactions; hover it to see the source and date.
 - **EUR/USD**: the **BCE** button fetches the European Central Bank reference rate (no key) and adds the day to `fxHistory`.
 - **Brokers**: configured per transaction via the optional `broker` field; the Analytics "Corretora" pie shows shares per broker.

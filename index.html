@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-27.30';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -794,20 +794,12 @@ function calcHoldingYears(entry, exit) {
 // Config defaults (overridden by config.json)
 const DCFG={
   taxRate:0.28,
-  monthlyCapital:1200,
+  monthlyCapital:500,
   targetYield:0.045,
   divGrowth:0.03,
-  portfolioGoal:100000,
+  portfolioGoal:50000,
   fxEurUsd:1.08,
-  despesasItems:[
-    {icon:"🅿️",label:"Estacionamento",amount:30},
-    {icon:"💪",label:"Treinador",amount:55},
-    {icon:"⛽",label:"Gasóleo/Gasolina",amount:20},
-    {icon:"🍽️",label:"Restaurante",amount:45},
-    {icon:"🍴",label:"Restauração",amount:60},
-    {icon:"🏠",label:"Rent",amount:700},
-    {icon:"📈",label:"Investments",amount:400}
-  ],
+  despesasItems:[],
   benchmarkCache:{
     sp500:{byYear:{"2023":0.2629,"2024":0.2502,"2025":0.1788,"2026 YTD":0.0601}},
     msciWorld:{byYear:{"2023":0.2379,"2024":0.1867,"2025":0.2109,"2026 YTD":0.052}},
@@ -1534,7 +1526,7 @@ function validateImportedConfig(value){
 }
 function validateImportedWealth(value){
   requireJsonRecord(value,'wealth');
-  if(!['ppr','aforro','depositos','juros','claudiaInvestimentos','carlitosInvestimentos'].some(key=>Object.prototype.hasOwnProperty.call(value,key)))throw new Error('Não foram encontrados dados de património.');
+  if(!['ppr','aforro','depositos','juros'].some(key=>Object.prototype.hasOwnProperty.call(value,key))&&!Object.keys(value).some(isInvestmentKey))throw new Error('Não foram encontrados dados de património.');
   ['ppr','aforro','depositos','juros'].forEach(key=>{
     if(value[key]!==undefined&&!Array.isArray(value[key]))throw new Error(`${key} deve ser uma lista.`);
   });
@@ -1668,7 +1660,7 @@ function readLegacyPortfolio(data){
   const explicitSold=(data.sold||[]).filter(s=>!soldBuilt.find(x=>x.t===s.t));
   return{positions:active,sold:[...soldBuilt,...explicitSold]};
 }
-const WEALTH_KEYS=['ppr','aforro','depositos','juros','claudiaInvestimentos','carlitosInvestimentos'];
+const WEALTH_KEYS=['ppr','aforro','depositos','juros'];
 // An old teses.json is an object of theses; each one has at least one of these sections
 // ('business' is no longer shown but still identifies older files).
 const THESIS_FIELDS=['name','meta','thesis','business','moat','dividends','financials','keyPhrase','finalDecision','swot'];
@@ -1702,7 +1694,7 @@ function readDataFile(json,fileName){
   }else if(hasAnyKey(file,Object.keys(DCFG))){
     const{version,exportedAt,...cfg}=file;
     data.config=validateImportedConfig(cfg);
-  }else if(hasAnyKey(file,WEALTH_KEYS)){
+  }else if(hasAnyKey(file,WEALTH_KEYS)||Object.keys(file||{}).some(isInvestmentKey)){
     const{version,exportedAt,...w}=file;
     data.wealth=validateImportedWealth(w);
   }else{
@@ -1933,8 +1925,8 @@ function priceFreshness(position){
   const when=asOf?`de ${asOf}${age!==null?` (${age} dia${age===1?'':'s'})`:''}`:'sem data';
   return{live:false,title:`Preço não live: ${source}, ${when}.`};
 }
-// Current price for tickers held outside the portfolio (wealth.claudiaInvestimentos,
-// carlitosInvestimentos…): an active position's price if there is one, otherwise
+// Current price for tickers held outside the portfolio (wealth.<owner>Investimentos
+// sections): an active position's price if there is one, otherwise
 // cfg.refPrices[ticker] (kept up to date by Config → Cotações online).
 function referencePrice(ticker,pos,cfg){
   const p=(pos||[]).find(x=>x.t===ticker&&x.cv>0);
@@ -1952,10 +1944,18 @@ function referenceTickers(wealth,pos,cfg){
   return[...out].filter(t=>!held.has(t));
 }
 // Wealth sections holding lots bought outside the main portfolio, and their owner.
-const WEALTH_INVESTMENTS=[
-  {key:'claudiaInvestimentos',owner:'Claudia',label:'Claudia Investimentos'},
-  {key:'carlitosInvestimentos',owner:'Carlitos',label:'Carlitos Investimentos'},
-];
+// Any wealth key ending in "Investimentos" (e.g. "anaInvestimentos") is one owner's
+// section; the owner defaults to the capitalised prefix, or section.owner / section.label.
+const isInvestmentKey=key=>/^[a-z][A-Za-z0-9]*Investimentos$/.test(key);
+const INVESTMENT_COLORS=['#f472b6','#fbbf24','#34d399','#60a5fa','#c084fc'];
+function wealthInvestments(wealth){
+  return Object.keys(wealth||{}).filter(key=>isInvestmentKey(key)&&wealth[key]&&typeof wealth[key]==='object').map((key,i)=>{
+    const prefix=key.slice(0,-'Investimentos'.length);
+    const owner=wealth[key].owner||prefix.charAt(0).toUpperCase()+prefix.slice(1);
+    return{key,owner,label:wealth[key].label||'Investimentos '+owner,
+      color:(wealth.netWorthColors||{})[key]||INVESTMENT_COLORS[i%INVESTMENT_COLORS.length]};
+  });
+}
 // One lot: units = invested / purchase price; current value needs a price
 // (referencePrice). Without a price the value falls back to the amount invested.
 function investmentLot(r,pos,cfg){
@@ -2261,9 +2261,7 @@ function PatrimonioPage({wealth,pos,cfg}){
   const depositos=(wealth||{}).depositos||[];
   const depositosSorted=useMemo(()=>[...depositos].sort((a,b)=>{const da=a.endDate||'9999',db=b.endDate||'9999';return da<db?-1:da>db?1:0;}),[depositos]);
   const juros  = (wealth||{}).juros  || [];
-  const ci=(wealth||{}).claudiaInvestimentos;
-  const ca=(wealth||{}).carlitosInvestimentos;
-  const empty=!ppr.length&&!aforro.length&&!depositos.length&&!ci&&!ca&&!(pos||[]).some(p=>p.n>0);
+  const empty=!ppr.length&&!aforro.length&&!depositos.length&&!wealthInvestments(wealth).length&&!(pos||[]).some(p=>p.n>0);
   if(empty) return h('div',{style:{padding:48,textAlign:'center',color:'var(--muted)',fontSize:14}},
     'Importa o wealth.json para ver o teu património.');
 
@@ -2329,9 +2327,9 @@ function PatrimonioPage({wealth,pos,cfg}){
     return s+(r.valor&&r.rate?r.valor*r.rate:0);
   },0);
 
-  /* ── Claudia Investimentos ───────────────────────────────────────────────── */
-  // Investments outside the portfolio (Claudia, Carlitos), respecting the owner filter.
-  const invSum=WEALTH_INVESTMENTS.filter(w=>matchOwner(w.owner))
+  /* ── Investimentos fora da carteira ───────────────────────────────────────────────── */
+  // Investments outside the portfolio (one section per owner), respecting the owner filter.
+  const invSum=wealthInvestments(wealth).filter(w=>matchOwner(w.owner))
     .map(w=>investmentsSummary(wealth?.[w.key]?.investimentos,pos,cfg))
     .reduce((a,b)=>({value:a.value+b.value,cost:a.cost+b.cost,pl:a.pl+b.pl}),{value:0,cost:0,pl:0});
 
@@ -2390,7 +2388,7 @@ function PatrimonioPage({wealth,pos,cfg}){
           (wealth?.aforro||[]).forEach(r=>{vals[r.owner]=(vals[r.owner]||0)+(Number(r.investimento)||0)+(r.juros||0);});
           (wealth?.depositos||[]).forEach(r=>{vals[r.investidor]=(vals[r.investidor]||0)+(r.valor||0);});
           (wealth?.juros||[]).forEach(r=>{vals[r.investidor]=(vals[r.investidor]||0)+(r.valor||0);});
-          WEALTH_INVESTMENTS.forEach(w=>{
+          wealthInvestments(wealth).forEach(w=>{
             const val=investmentsSummary(wealth?.[w.key]?.investimentos,pos,cfg).value;
             if(val)vals[w.owner]=(vals[w.owner]||0)+val;
           });
@@ -2449,7 +2447,7 @@ function PatrimonioPage({wealth,pos,cfg}){
       ppr.forEach(r=>add(r.owner,'ppr',(r.valorInvestido||0)+(r.ganhosBrutos||0)));
       aforro.forEach(r=>add(r.owner,'aforro',(Number(r.investimento)||0)+(r.juros||0)));
       juros.forEach(r=>add(r.investidor||r.owner||'Carlos','juros',r.valor||0));
-      WEALTH_INVESTMENTS.forEach(w=>(wealth?.[w.key]?.investimentos||[]).forEach(r=>add(w.owner,'inv',investmentLot(r,pos,cfg).value)));
+      wealthInvestments(wealth).forEach(w=>(wealth?.[w.key]?.investimentos||[]).forEach(r=>add(w.owner,'inv',investmentLot(r,pos,cfg).value)));
       const rows=Object.entries(alloc)
         .filter(([o])=>matchOwner(o))
         .map(([o,v])=>({owner:o,vals:v,total:CATS.reduce((s,c)=>s+(v[c.key]||0),0)}))
@@ -2646,8 +2644,8 @@ function PatrimonioPage({wealth,pos,cfg}){
       )
     ),
 
-    /* ── Claudia / Carlitos Investimentos ─────────────────────────────────── */
-    ...WEALTH_INVESTMENTS.map(w=>{
+    /* ── Investimentos por dono ─────────────────────────────────── */
+    ...wealthInvestments(wealth).map(w=>{
       const items=wealth?.[w.key]?.investimentos||[];
       if(!items.length||!matchOwner(w.owner))return null;
       const sum=investmentsSummary(items,pos,cfg);
@@ -4710,9 +4708,9 @@ function App(){
         ...jYears.map(y=>(r[y]??'').toString()),tot.toFixed(2));
     });
 
-    // ── Sheet 11: Wealth — Claudia Investimentos ──────────────────────────
+    // ── Sheet 11: Wealth — investments outside the portfolio (one block per owner) ──
     const ciHeaders=row('Ticker','Valor Investido','Preço Compra','Data Compra','Curr Price','Valor Actual','P&L','P&L%');
-    const ciRows=((wData.claudiaInvestimentos||{}).investimentos||[]).map(r=>{
+    const ciBlocks=wealthInvestments(wData).flatMap(w=>['=== 14. WEALTH — '+w.label.toUpperCase()+' ===',ciHeaders,...((wData[w.key]||{}).investimentos||[]).map(r=>{
       const currPrice=referencePrice(r.ticker,pos,cfg)?.cv;
       const units=r.precoCompra&&r.valorInvestido?r.valorInvestido/r.precoCompra:null;
       const valorActual=units&&currPrice?units*currPrice:null;
@@ -4721,7 +4719,7 @@ function App(){
       return row(r.ticker,r.valorInvestido??'',r.precoCompra??'',r.dataCompra||'',
         currPrice??'',valorActual!=null?valorActual.toFixed(2):'',
         pl!=null?pl.toFixed(2):'',plp!=null?pct(plp):'');
-    });
+    }),'']);
 
     // ── Sheet 12: Net Worth Summary per Owner ─────────────────────────────
     const nwHeaders=row('Owner','Asset Type','Name','Investido','Valor Actual','Ganho','Retorno%');
@@ -4753,8 +4751,8 @@ function App(){
       (wData.juros||[]).filter(r=>r.investidor===owner).forEach(r=>{
         nwRows.push(row(owner,'Juros',r.plataforma,r.valor??'',r.valor??'','0','0.00'));
       });
-      // Claudia / Carlitos Investimentos
-      WEALTH_INVESTMENTS.filter(w=>w.owner===owner).forEach(w=>{
+      // Investments outside the portfolio
+      wealthInvestments(wData).filter(w=>w.owner===owner).forEach(w=>{
         ((wData[w.key]||{}).investimentos||[]).forEach(r=>{
           const va=investmentLot(r,pos,cfg).value;
           const pl=va-(r.valorInvestido||0);
@@ -4781,7 +4779,7 @@ function App(){
       ...sep,'=== 11. WEALTH — AFORRO ===',aforroHeaders,...aforroRows,
       ...sep,'=== 12. WEALTH — DEPOSITOS ===',depHeaders,...depRows,
       ...sep,'=== 13. WEALTH — JUROS ===',jurosHeaders,...jurosRows,
-      ...sep,'=== 14. WEALTH — CLAUDIA INVESTIMENTOS ===',ciHeaders,...ciRows,
+      ...sep,...ciBlocks,
       ...sep,'=== 15. NET WORTH SUMMARY ===',nwHeaders,...nwRows,
     ];
     const blob=new Blob(['\uFEFF'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
@@ -5219,21 +5217,19 @@ function Dash({pos,qual,income,sold,cfg,setCfg,wealth}){
       h(Kpi,{label:'Total P&L',value:(m.pl>=0?'+€':'-€')+fn(Math.abs(m.pl)),accent:'bl',sub:(()=>{const eurTotal=m.plEUR+m.plEtfEq+m.plEtfBo;return 'P&L: '+(m.plUSD>=0?'+':'-')+'$'+fn(Math.abs(m.plUSD))+' · '+(eurTotal>=0?'+':'-')+'€'+fn(Math.abs(eurTotal));})()} ),
       h(Kpi,{label:'Average Yield',value:fp(m.avgYield),accent:'bl',sub:'Yield on Cost '+fp(m.avgYoc)}),
       h(Kpi,{label:'Dividendos Totais',value:'$'+fn(m.grandDivUSD)+' · €'+fn(m.grandDivEUR),accent:'bl',sub:(()=>{const fx=cfg?.fxEurUsd||1.08;const months=(perfMetrics?.totalYears||0)*12;const totalEUR=m.grandDivEUR+(m.grandDivUSD/fx);const mly=months>0?totalEUR/months:0;return 'Média: €'+fn(mly)+'/mês';})()}),
-      /* Claudia Folio */
+      /* Investments outside the portfolio (all owners) */
       (()=>{
-        const ci=(wealth?.claudiaInvestimentos?.investimentos)||[];
-        const clVal=ci.reduce((s,r)=>{
-          const cv=referencePrice(r.ticker,pos,cfg)?.cv;
-          const units=r.precoCompra&&r.valorInvestido?r.valorInvestido/r.precoCompra:0;
-          return s+(cv&&units?units*cv:r.valorInvestido||0);
-        },0);
-        const clCost=ci.reduce((s,r)=>s+(r.valorInvestido||0),0);
-        const clPL=clVal-clCost;
+        const invs=wealthInvestments(wealth);
+        if(!invs.length)return null;
+        const lots=invs.flatMap(w=>wealth[w.key].investimentos||[]);
+        const sum=investmentsSummary(lots,pos,cfg);
+        const clCost=lots.reduce((s,r)=>s+(r.valorInvestido||0),0);
+        const clPL=sum.value-clCost;
         const clPlp=clCost>0?clPL/clCost:0;
-        return h(Kpi,{label:'Claudia Folio',
-          value:'€'+fn(clVal),
+        return h(Kpi,{label:invs.length===1?invs[0].label:'Outros investimentos',
+          value:'€'+fn(sum.value),
           accent:'bl',
-          sub:'P&L: '+(clPL>=0?'+':'')+'€'+fn(Math.abs(clPL))+' ('+fp(clPlp)+')'});
+          sub:'P&L: '+(clPL>=0?'+':'-')+'€'+fn(Math.abs(clPL))+' ('+fp(clPlp)+')'});
       })(),
     ),
     h('div',{className:'grid gap-4 items-start mb-4 grid-cols-1 md:grid-cols-[2fr_1fr]'},
@@ -5392,21 +5388,13 @@ h('div',{className:'card-sm'},
           const aferroTotal=(wealth?.aforro||[]).reduce((s,r)=>s+(Number(r.v2025)||Number(r.investimento)||0),0);
           // Depósitos a Prazo
           const depositosTotal=(wealth?.depositos||[]).reduce((s,r)=>s+(r.valor||0),0);
-          // Claudia Investimentos — use live currentVal if VWCE.DE price available
-          const claudiaTotal=(()=>{
-            const items=wealth?.claudiaInvestimentos?.investimentos||[];
-            if(!items.length)return 0;
-            return items.reduce((s,r)=>{
-              const cv=referencePrice(r.ticker,pos,cfg)?.cv;
-              const units=r.precoCompra&&r.valorInvestido?r.valorInvestido/r.precoCompra:null;
-              return s+(units&&cv?units*cv:r.valorInvestido||0);
-            },0);
-          })();
+          // Investments outside the portfolio, one line per owner section
+          const invItems=wealthInvestments(wealth).map(w=>({label:w.label,val:investmentsSummary(wealth[w.key].investimentos,pos,cfg).value,col:w.color}));
+          const invTotal=invItems.reduce((s,x)=>s+x.val,0);
           // Portfolio: total market value (EUR)
           const portTotal=m.tv||0;
           const jurosCapital=(wealth?.juros||[]).reduce((s,r)=>s+(r.valor||0),0);
-          const carlitosTotal=investmentsSummary(wealth?.carlitosInvestimentos?.investimentos,pos,cfg).value;
-          const grandTotal=portTotal+pprTotal+aferroTotal+depositosTotal+claudiaTotal+carlitosTotal+jurosCapital;
+          const grandTotal=portTotal+pprTotal+aferroTotal+depositosTotal+invTotal+jurosCapital;
           if(!grandTotal)return null;
           const nwc=wealth?.netWorthColors||{};
           const items=[
@@ -5414,8 +5402,7 @@ h('div',{className:'card-sm'},
             {label:'PPR',val:pprTotal,col:nwc.ppr||'var(--gold)'},
             {label:'Certificados de Aforro',val:aferroTotal,col:nwc.aforro||'var(--blue)'},
             {label:'Depósitos a Prazo',val:depositosTotal,col:nwc.depositos||'#a78bfa'},
-            {label:'Claudia Investimentos',val:claudiaTotal,col:nwc.claudiaInvestimentos||'#f472b6'},
-            {label:'Carlitos Investimentos',val:carlitosTotal,col:nwc.carlitosInvestimentos||'#fbbf24'},
+            ...invItems,
             {label:'Juros / Cash',val:jurosCapital,col:'var(--green)'},
           ].filter(x=>x.val>0).sort((a,b)=>b.val-a.val);
           return h('div',{className:'card'},
@@ -6045,7 +6032,7 @@ function PricePanel({cfg,setCfg,pos,setPos,wealth}){
     return()=>window.removeEventListener('price-keys-changed',refresh);
   },[]);
   const fb=fallback&&fallback!==provider?fallback:'';
-  // Active positions plus reference tickers (e.g. VWCE.DE in Claudia Investimentos),
+  // Active positions plus reference tickers (e.g. an ETF held in a wealth <owner>Investimentos section),
   // whose price is stored in cfg.refPrices instead of a position. They are in EUR.
   const active=[...(pos||[]).filter(p=>(p.n==null||p.n>0)&&p.t),
     ...referenceTickers(wealth,pos,cfg).map(t=>({t,cat:'EUR',cv:cfg?.refPrices?.[t]?.cv||null,ref:true}))];
@@ -6168,7 +6155,7 @@ function PricePanel({cfg,setCfg,pos,setPos,wealth}){
           return h('tr',{key:r.t},
             h('td',{style:cell},h('input',{type:'checkbox',checked:!!r.apply,disabled:r.status!=='ok'||running,
               onChange:e=>setRows(rows.map((x,j)=>j===i?{...x,apply:e.target.checked}:x))})),
-            h('td',{style:{...cell,fontWeight:700},title:r.ref?'Fora da carteira (ex.: Claudia Investimentos): o preço é guardado em refPrices':''},r.t,r.ref&&h('span',{style:{fontWeight:400,color:'var(--muted)',marginLeft:4}},'(ref.)')),
+            h('td',{style:{...cell,fontWeight:700},title:r.ref?'Fora da carteira (secção Investimentos do Património): o preço é guardado em refPrices':''},r.t,r.ref&&h('span',{style:{fontWeight:400,color:'var(--muted)',marginLeft:4}},'(ref.)')),
             h('td',{style:cell},h('input',{className:'ed',style:{width:84,fontSize:10},defaultValue:r.symbol,disabled:running,key:r.t+r.symbol,
               title:'Formato: TICKER ou TICKER.BOLSA ('+Object.keys(PRICE_EXCHANGES).filter(k=>k!=='US').join(', ')+')',
               onBlur:e=>{if(p&&e.target.value.trim().toUpperCase()!==r.symbol){changeSymbol(p,e.target.value);setRows(rows.map((x,j)=>j===i?{...x,symbol:e.target.value.trim().toUpperCase()||defaultPriceSymbol(p),status:'pending',apply:false}:x));}}})),
@@ -7843,9 +7830,9 @@ function AnalyticsPage({pos,qual,income,sold,cfg,wealth}){
             const costAnnual=val*ter;
             return{key:t+(note||''),t,note,val,ter,costAnnual,costMonthly:costAnnual/12};
           };
-          // ETFs held outside the portfolio (Claudia + Carlitos Investimentos), one line per ticker.
+          // ETFs held outside the portfolio (wealth <owner>Investimentos sections), one line per ticker.
           const outside={};
-          WEALTH_INVESTMENTS.forEach(w=>(wealth?.[w.key]?.investimentos||[]).forEach(r=>{
+          wealthInvestments(wealth).forEach(w=>(wealth?.[w.key]?.investimentos||[]).forEach(r=>{
             if(!r?.ticker)return;
             const o=outside[r.ticker]=outside[r.ticker]||{val:0,owners:new Set()};
             o.val+=investmentLot(r,pos,cfg).value;o.owners.add(w.owner);

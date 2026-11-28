@@ -134,7 +134,7 @@ Keys written by the price and exchange-rate updates:
 | `priceFallback` | Provider tried for the tickers the main one can't price (same values, or `""` for none). Default `alphavantage`. |
 | `priceSymbols` | `{ "<ticker>": "<symbol>" }` overrides for tickers the provider knows by another symbol, e.g. `{ "LGEN": "LGEN.L" }`. Format `TICKER` (US) or `TICKER.EXCHANGE` with `L`, `AS`, `LS`, `MI`, `DE`, `F`, `BE`, `PA`, `MC`, `CO`. |
 | `quotesImportedAt`, `quotesSource` | When prices were last updated, and from where. |
-| `refPrices` | `{ "<ticker>": { "cv": number, "asOf": date, "source": string } }`: prices for tickers held outside the portfolio (e.g. VWCE.DE in `wealth.claudiaInvestimentos`), in EUR. Used when no active position has that ticker; updated by Cotações online. |
+| `refPrices` | `{ "<ticker>": { "cv": number, "asOf": date, "source": string } }`: prices for tickers held outside the portfolio (e.g. an ETF in a `wealth.<owner>Investimentos` section), in EUR. Used when no active position has that ticker; updated by Cotações online. |
 | `fxHistory` | `{ unit, source, asOf, rates: { "YYYY-MM-DD": USD per 1 EUR } }`. Filled by the **BCE** button with ECB reference rates from the first transaction to today. The Tax page converts each sale at its date and each lot's cost at its purchase date; dividends at the year's average rate. |
 | `benchmarkCache` | `{ sp500:{byYear,source}, msciWorld:{byYear,source}, asOf }`. Yearly total returns (`"2026 YTD"` for the current year). **Actualizar (SPY, URTH)** computes them from Alpha Vantage monthly adjusted closes. |
 | `dividendEvents` | `{ "<ticker>": { fetchedAt, events:[ { ex, pay, amount } ] } }`: real dividend dates and amount per share (US listings, Alpha Vantage). Used by the monthly dividend map and the dividend calendar; refreshed with **Actualizar datas** on the Dividends page. |
@@ -181,11 +181,10 @@ End date, when `endDate` is absent: `dataConstituicao` + **E 10 years · F 15 ye
 ### `juros[]` (interest on cash accounts)
 `plataforma`, `country` (flag or name; drives the withholding rate via `config.whtByCountry`), `valor` (balance), `rate`, `investidor`, plus yearly amounts as keys `"2023"`, `"2024"`, … (`null` when unknown).
 
-### `claudiaInvestimentos`
-`{ "investimentos": [ { "ticker", "valorInvestido", "precoCompra", "dataCompra", "broker"? } ] }`. Lots bought outside the main portfolio (currently VWCE.DE). Units = `valorInvestido / precoCompra`; the current price comes from an active position with the same ticker or from `config.refPrices`.
-
-### `carlitosInvestimentos`
-Same shape as `claudiaInvestimentos`, owner **Carlitos**. Shown as its own "Carlitos Investimentos" card on Net Worth and included in the net-worth totals.
+### `<owner>Investimentos`
+Any key ending in `Investimentos` (e.g. `anaInvestimentos`) holds lots one owner bought outside the main portfolio:
+`{ "owner"?, "label"?, "investimentos": [ { "ticker", "valorInvestido", "precoCompra", "dataCompra", "broker"? } ] }`.
+The owner defaults to the capitalised prefix (`anaInvestimentos` → `Ana`) and the card label to "Investimentos <owner>". Each section is its own card on Net Worth and is included in the net-worth totals, the Dashboard and the CSV export. Units = `valorInvestido / precoCompra`; the current price comes from an active position with the same ticker or from `config.refPrices`.
 
 ### Display tables
 - `owners`: `{ "<name>": { "color": "#hex", "bg": "#hex" } }`
