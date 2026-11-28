@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.19';</script>
-<meta name="theme-color" content="#0d1117">
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.22';</script>
+<meta name="theme-color" content="#0a0a0b">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
@@ -40,10 +40,12 @@
 <style>
 /* ── CSS custom properties (theming) ─────────────────── */
 :root{
-  --bg:#0d1117;--surface:#161b22;--s2:#1c2333;--border:#30363d;
-  --muted:#8b949e;--green:#34d399;--red:#f87171;--gold:#e3b341;
-  --blue:#58a6ff;--orange:#d29922;--mono:'JetBrains Mono',monospace;
-  --text:#e6edf3;
+  /* Theme "Graphite Emerald": near-black greys, one accent (emerald). --gold and
+     --orange are the accent; --blue is a teal for secondary/info values. */
+  --bg:#0a0a0b;--surface:#141416;--s2:#1c1c1f;--border:#2a2a2e;
+  --muted:#9a9aa3;--green:#10b981;--red:#f43f5e;--gold:#10b981;
+  --blue:#2dd4bf;--orange:#10b981;--mono:'JetBrains Mono',monospace;
+  --text:#f4f4f5;--accent:#10b981;--accent-ink:#04130d;
   /* Named aliases for the 4-tier quality-metric scale (red→tier-warn→tier-ok→green)
      used across ~60 spots (scoreColor, sc2col, py/eps/debt/fcf/revgr/opmar colors,
      legends). Same hex as before — this only gives them a name so future edits
@@ -51,7 +53,7 @@
   --tier-warn:#fb923c;--tier-ok:#fbbf24;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:#e6edf3;font-size:14px;}
+body{background:var(--bg);color:var(--text);font-size:14px;}
 table{border-collapse:collapse;width:100%;}
 th{padding:8px 12px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
 td{padding:8px 12px;font-size:14px;border-bottom:1px solid var(--s2);vertical-align:middle;}
@@ -61,8 +63,8 @@ tfoot td{font-weight:600;font-size:14px;}
 /* Native <select> dropdown popups otherwise render with the browser's default
    light theme (white background/black text) since inline styles on <select>
    don't reach its <option> popup list — style them globally instead. */
-select{background:var(--s2);color:#e6edf3;}
-option{background:var(--surface);color:#e6edf3;}
+select{background:var(--s2);color:var(--text);}
+option{background:var(--surface);color:var(--text);}
 select:focus{outline:1px solid var(--blue);}
 
 .badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:13px;font-weight:700;letter-spacing:.04em;}
@@ -82,8 +84,8 @@ a{color:var(--blue);text-decoration:none;}
 .tabs::-webkit-scrollbar{display:none;}
 
 /* ── Editable cell input ── */
-.ed{font-family:var(--mono);font-size:13px;text-align:right;color:var(--muted);width:72px;background:#0d1117 !important;border:1px solid var(--border);border-radius:4px;padding:2px 4px;}
-.ed:focus{background:#243044;color:#f8fafc;outline:none;}
+.ed{font-family:var(--mono);font-size:13px;text-align:right;color:var(--muted);width:72px;background:#0a0a0b !important;border:1px solid var(--border);border-radius:4px;padding:2px 4px;}
+.ed:focus{background:#2a2a2e;color:#f8fafc;outline:none;}
 .ed:focus{color:#f8fafc;outline:none;}
 
 /* ── Sortable header ── */
@@ -92,11 +94,11 @@ a{color:var(--blue);text-decoration:none;}
 
 /* ── Filter button ── */
 .fb{padding:4px 10px;border-radius:9999px;font-size:13px;font-weight:600;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s;white-space:nowrap;}
-.fb.on{border-color:var(--blue);background:#1a2a3a;color:var(--blue);}
-.fb:hover:not(.on){color:#e6edf3;}
+.fb.on{border-color:var(--accent);background:rgba(16,185,129,.12);color:var(--accent);}
+.fb:hover:not(.on){color:#f4f4f5;}
 
 /* ── Toast ── */
-.toast{position:fixed;bottom:24px;right:24px;background:#238636;color:#fff;padding:8px 16px;border-radius:6px;font-size:14px;font-weight:600;z-index:9999;pointer-events:none;}
+.toast{position:fixed;bottom:24px;right:24px;background:#10b981;color:#fff;padding:8px 16px;border-radius:6px;font-size:14px;font-weight:600;z-index:9999;pointer-events:none;}
 
 /* ── Top navigation bar ── */
 /* Donut chart + legend: legend columns spread evenly over the free width */
@@ -108,8 +110,8 @@ a{color:var(--blue);text-decoration:none;}
 @media(max-width:640px){.cal-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
 /* SWOT matrix (Teses): 2×2 coloured quadrants with axis labels; one column on phones */
 .swot{display:grid;grid-template-columns:52px 1fr 1fr;grid-template-rows:auto auto auto;gap:8px;}
-.swot-head{background:#2b2f36;color:#f3f4f6;border-radius:6px;padding:8px 10px;text-align:center;}
-.swot-side{background:#2b2f36;color:#f3f4f6;border-radius:6px;display:flex;align-items:center;justify-content:center;}
+.swot-head{background:#2a2a2e;color:#f3f4f6;border-radius:6px;padding:8px 10px;text-align:center;}
+.swot-side{background:#2a2a2e;color:#f3f4f6;border-radius:6px;display:flex;align-items:center;justify-content:center;}
 .swot-side>div{transform:rotate(-90deg);white-space:nowrap;text-align:center;}
 .swot-q{border-radius:6px;padding:14px 14px 16px;color:#16181d;}
 .swot-items{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px;margin-top:10px;}
@@ -117,10 +119,11 @@ a{color:var(--blue);text-decoration:none;}
 /* Table whose header stays visible while its rows scroll (Quality Score) */
 /* Long tables grow with the page (no inner scroll); the header sticks under the top bar. */
 .sticky-head{overflow:visible !important;}
-.tall-head thead th{padding-top:24px;padding-bottom:24px;}
+/* Table headers on every page: double height (overrides inline paddings). */
+.page thead th{padding-top:24px !important;padding-bottom:24px !important;}
 .sticky-head thead th{position:sticky;top:48px;z-index:2;background:var(--surface);box-shadow:inset 0 -1px 0 var(--border);}
-.sticky-head thead th:first-child{border-top-left-radius:10px;}
-.sticky-head thead th:last-child{border-top-right-radius:10px;}
+.sticky-head thead th:first-child{border-top-left-radius:12px;}
+.sticky-head thead th:last-child{border-top-right-radius:12px;}
 /* Narrow screens: the table scrolls sideways inside its card, so the header can't stick to the page. */
 @media(max-width:1100px){.sticky-head{overflow-x:auto !important;}.sticky-head thead th{position:static;}}
 .bar{
@@ -204,17 +207,17 @@ a{color:var(--blue);text-decoration:none;}
   .hamburger{display:flex;}
   .tabs{display:none !important;}
 }
-.tab:hover{background:var(--s2);color:#e6edf3;}
-.tab-on{background:var(--orange) !important;color:#fff !important;}
+.tab:hover{background:var(--s2);color:#f4f4f5;}
+.tab-on{background:var(--accent) !important;color:var(--accent-ink) !important;}
 .btn-primary{
-  flex-shrink:0;padding:6px 14px;border-radius:6px;font-size:14px;font-weight:700;
-  border:none;background:#238636;color:#fff;cursor:pointer;
+  flex-shrink:0;padding:6px 16px;border-radius:999px;font-size:14px;font-weight:700;
+  border:none;background:var(--accent);color:var(--accent-ink);cursor:pointer;
   font-family:inherit;white-space:nowrap;transition:background .15s;position:relative;
 }
 .btn-primary:hover{background:#2ea043;}
 
 /* ── Page content area ── */
-.page{padding:20px 20px;max-width:1600px;margin:0 auto;}
+.page{padding:20px 24px;margin:0 auto;}
 @media(max-width:640px){.page{padding:10px 10px;}}
 @media(max-width:640px){
   .kpi-grid{grid-template-columns:repeat(2,1fr) !important;}
@@ -251,10 +254,10 @@ a{color:var(--blue);text-decoration:none;}
 
 
 /* ── Card variants ── */
-.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px 24px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px 24px;}
 @media(max-width:640px){.card{padding:14px 14px;border-radius:8px;}}
-.card-table{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
-.card-sm{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;}
+.card-table{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+.card-sm{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;}
 .summary-grid-6{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;}
 @media(min-width:640px){.summary-grid-6{grid-template-columns:repeat(3,1fr);}}
 @media(min-width:1024px){.summary-grid-6{grid-template-columns:repeat(6,1fr);}}
@@ -284,19 +287,19 @@ a{color:var(--blue);text-decoration:none;}
 
 /* ── Savebtn colour variants ── */
 .btn-secondary{
-  flex-shrink:0;padding:6px 14px;border-radius:6px;font-size:14px;font-weight:700;
+  flex-shrink:0;padding:6px 16px;border-radius:999px;font-size:14px;font-weight:700;
   cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s;
   background:#1a3a2a;border:1px solid #0d9488;color:#0d9488;
 }
 .btn-secondary:hover{background:#1f4a38;}
 .btn-tertiary{
-  flex-shrink:0;padding:6px 14px;border-radius:6px;font-size:14px;font-weight:700;
+  flex-shrink:0;padding:6px 16px;border-radius:999px;font-size:14px;font-weight:700;
   cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s;
-  background:#1a2a3a;border:1px solid var(--blue);color:var(--blue);
+  background:#1c1c1f;border:1px solid var(--blue);color:var(--blue);
 }
 .btn-tertiary:hover{background:#1e3a50;}
 .btn-quaternary{
-  flex-shrink:0;padding:6px 14px;border-radius:6px;font-size:14px;font-weight:700;
+  flex-shrink:0;padding:6px 16px;border-radius:999px;font-size:14px;font-weight:700;
   cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s;
   background:#1a2a1a;border:1px solid var(--green);color:var(--green);
 }
@@ -315,6 +318,9 @@ a{color:var(--blue);text-decoration:none;}
 @media(max-width:640px){.page{zoom:.86;}.shdr-title{white-space:normal !important;}}
 /* Grid and flex children may shrink below their content, so wide tables scroll inside their card. */
 .page .grid>*,.page .flex-col>*{min-width:0;}
+.tab{border-radius:999px !important;}
+.logo{color:var(--text) !important;}
+.logo::first-letter{color:var(--accent);}
 /* Navigation centred on the page: logo left, tabs centre, save button right. */
 @media(min-width:641px){
   .bar{display:grid;grid-template-columns:1fr auto 1fr;}
@@ -1385,7 +1391,7 @@ function buildSoldByYear(sold){
 }
 function sy(cat){return cat==='USD'?'$':'€';}
 function gc(v,thr){
-  if(v==null)return{bg:'#16202e',fg:'#4b5563'};
+  if(v==null)return{bg:'#1c1c1f',fg:'#4b5563'};
   const[t1,t2,t3,t4]=thr;
   if(v<t1)return{bg:'#3b0a0a',fg:'var(--red)'};
   if(v<t2)return{bg:'#431407',fg:'var(--tier-warn)'};
@@ -1417,7 +1423,7 @@ function DgCell({q,field}){
 }
 function scoreColor(s){
   // calcScore returns 0-103; color bands are proportional to the maximum.
-  if(!s&&s!==0)return{bg:'#16202e',fg:'#4b5563'};
+  if(!s&&s!==0)return{bg:'#1c1c1f',fg:'#4b5563'};
   if(s<21)return{bg:'#3b0a0a',fg:'var(--red)'};
   if(s<42)return{bg:'#431407',fg:'var(--tier-warn)'};
   if(s<62)return{bg:'#3d3108',fg:'var(--tier-ok)'};
@@ -1425,7 +1431,7 @@ function scoreColor(s){
   return{bg:'#052e16',fg:'var(--green)'};
 }
 function payoutMetricColor(value){
-  if(value==null)return{bg:'#16202e',color:'var(--muted)'};
+  if(value==null)return{bg:'#1c1c1f',color:'var(--muted)'};
   if(value>0.92)return{bg:'#3b0a0a',color:'var(--red)'};
   if(value>0.75)return{bg:'#431407',color:'var(--tier-warn)'};
   if(value>0.60)return{bg:'#3d3108',color:'var(--tier-ok)'};
@@ -1433,7 +1439,7 @@ function payoutMetricColor(value){
   return{bg:'#052e16',color:'var(--green)'};
 }
 function yieldMetricColor(value){
-  if(value==null)return{bg:'#16202e',color:'var(--muted)'};
+  if(value==null)return{bg:'#1c1c1f',color:'var(--muted)'};
   if(value<0.01)return{bg:'#3b0a0a',color:'var(--red)'};
   if(value<0.02)return{bg:'#431407',color:'var(--tier-warn)'};
   if(value<0.035)return{bg:'#3d3108',color:'var(--tier-ok)'};
@@ -2314,7 +2320,7 @@ function PatrimonioPage({wealth,pos,cfg}){
         return h('button',{key:o,onClick:()=>setOwnerFilter(o),style:{
           padding:'5px 14px',borderRadius:20,fontSize:14,fontWeight:600,cursor:'pointer',
           border:'1px solid '+(active?(s?s.color:'var(--blue)'):'var(--border)'),
-          background:active?(s?s.bg:'#1a2a3a'):'transparent',
+          background:active?(s?s.bg:'#1c1c1f'):'transparent',
           color:active?(s?s.color:'var(--blue)'):'var(--muted)'
         }},o);
       })
@@ -2326,10 +2332,10 @@ function PatrimonioPage({wealth,pos,cfg}){
       const CATS=[
         {key:'stocks',label:'Stocks',color:'#f472b6'},
         {key:'etfs',label:'ETFs',color:'#2dd4bf'},
-        {key:'dep',label:'Depósitos',color:'#58a6ff'},
+        {key:'dep',label:'Depósitos',color:'#2dd4bf'},
         {key:'ppr',label:'PPR',color:'#34d399'},
-        {key:'aforro',label:'Cert. Aforro',color:'#e3b341'},
-        {key:'juros',label:'Juros',color:'#d29922'},
+        {key:'aforro',label:'Cert. Aforro',color:'#10b981'},
+        {key:'juros',label:'Juros',color:'#10b981'},
         {key:'inv',label:'Investimentos',color:'#c084fc'}
       ];
       const alloc={};
@@ -3630,7 +3636,7 @@ function pnlColor(v){return v==null?'var(--muted)':v>=0?'var(--green)':'var(--re
 // spirit as scoreColor() but reused for metrics that aren't quality scores
 // (yield, payout, growth, debt, streak). higherIsBetter flips the direction.
 function factorTier(val,goodAt,okAt,higherIsBetter=true){
-  if(val==null)return{bg:'#16202e',fg:'#4b5563'};
+  if(val==null)return{bg:'#1c1c1f',fg:'#4b5563'};
   const pass=higherIsBetter?val>=goodAt:val<=goodAt;
   const mid=higherIsBetter?val>=okAt:val<=okAt;
   if(pass)return{bg:'#052e16',fg:'var(--green)'};
@@ -4728,7 +4734,7 @@ const InfoTooltip=memo(function InfoTooltip({text,side='right'}){
       position:'absolute',
       [side==='right'?'left':'right']:'18px',
       top:'50%',transform:'translateY(-50%)',
-      background:'#1c2333',border:'1px solid var(--border)',borderRadius:6,
+      background:'#1c1c1f',border:'1px solid var(--border)',borderRadius:6,
       padding:'8px 10px',fontSize:13,color:'var(--text)',lineHeight:1.4,
       width:180,zIndex:50,boxShadow:'0 8px 24px rgba(0,0,0,.5)',textAlign:'left',
       fontWeight:400,letterSpacing:'normal',textTransform:'none',
@@ -5752,7 +5758,7 @@ function Port({pos,setPos,income,qual,setQual,cfg,sold,setSold}){
         ['TODAS','USD','EUR','ETF'].map(f=>h('button',{key:f,className:'fb'+(flt===f?' on':''),onClick:()=>setFlt(f)},f==='TODAS'?'Todas':f)),
       ),
       h('div',{className:'card-table overflow-x-auto'},
-        h('table',{className:'tall-head'},
+        h('table',null,
           h('thead',null,h('tr',null,
             h(TH,{f:'ticker',label:'Ticker',align:'left'}),
             h(TH,{f:'sc',label:'Score'}),
@@ -7208,7 +7214,7 @@ function Income({pos,setPos,income,qual,setQual,sold,cfg,initialTab}){
           ...displayYears.map(y=>h(TH,{key:y,f:String(y),label:String(y)})),
           h(TH,{f:'total',label:'Total'}),
         )),
-        h(TableSection,{grp:sortedUSD,tots:totUSD,sm:'$',label:'Acções USD',headerBg:'#0f1e3a',qualMap,displayYears,income,upd,rowTotal}),
+        h(TableSection,{grp:sortedUSD,tots:totUSD,sm:'$',label:'Acções USD',headerBg:'#18181b',qualMap,displayYears,income,upd,rowTotal}),
         h(TableSection,{grp:sortedEUR,tots:totEUR,sm:'€',label:'Acções EUR + ETFs',headerBg:'#0a1f16',qualMap,displayYears,income,upd,rowTotal}),
       )
     ),
@@ -7230,7 +7236,7 @@ function Income({pos,setPos,income,qual,setQual,sold,cfg,initialTab}){
           )),
           /* USD sold */
           soldUSD.length>0&&h('tbody',null,
-            h('tr',{style:{background:'#0f1e3a'}},
+            h('tr',{style:{background:'#18181b'}},
               h('td',{colSpan:DIV_YEARS.length+5,style:{padding:'8px 12px',fontSize:13,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--blue)'}},'[ VENDIDAS USD ]')
             ),
             ...soldUSD.map(p=>{
@@ -8722,7 +8728,7 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
               ...DISP_YEARS.map(y=>thSort(y,y,{color:y===CUR_YEAR?'var(--gold)':'inherit'})),
               thSort('total','Total'),
             )),
-            h(GroupSection,{grp:grpUSD,sm:'$',label:'Acções USD',headerBg:'#0f1e3a',labelColor:'var(--blue)',qualMap,income,DISP_YEARS,GROWTH,sortField:incSortField,sortDir:incSortDir,sortVal}),
+            h(GroupSection,{grp:grpUSD,sm:'$',label:'Acções USD',headerBg:'#18181b',labelColor:'var(--blue)',qualMap,income,DISP_YEARS,GROWTH,sortField:incSortField,sortDir:incSortDir,sortVal}),
             h(GroupSection,{grp:grpEUR,sm:'€',label:'Acções EUR + ETFs',headerBg:'#0a1f16',labelColor:'var(--green)',qualMap,income,DISP_YEARS,GROWTH,sortField:incSortField,sortDir:incSortDir,sortVal}),
           )
         )
@@ -8743,7 +8749,7 @@ function DividendosPage({pos,income,qual,sold,cfg,setCfg}){
             )),
             /* USD sold */
             soldWithDivUSD.length>0&&h('tbody',null,
-              h('tr',{style:{background:'#0f1e3a'}},
+              h('tr',{style:{background:'#18181b'}},
                 h('td',{colSpan:DISP_YEARS.length+3,style:{fontSize:13,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--blue)'}},'[ VENDIDAS USD ]')
               ),
               ...soldWithDivUSD.map(p=>{
@@ -9025,11 +9031,11 @@ function TesesScorecard({items,total}){
     items.map((it,i)=>{
       const sc=parseScore(it.score);
       const col=sc?scoreTone(sc.r):'var(--muted)';
-      return h('div',{key:i,style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) 70px 52px',gap:8,alignItems:'center',padding:'4px 0',borderBottom:'1px solid var(--s2)',fontSize:14}},
+      return h('div',{key:i,style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) 70px 72px',gap:8,alignItems:'center',padding:'4px 0',borderBottom:'1px solid var(--s2)',fontSize:14}},
         h('span',{style:{color:'var(--muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'},title:it.metric},it.metric),
         h('div',{style:{height:5,background:'var(--s2)',borderRadius:3,overflow:'hidden'}},
           sc&&h('div',{style:{height:'100%',width:(sc.r*100)+'%',background:col,borderRadius:3}})),
-        h('span',{style:{textAlign:'right',fontWeight:700,fontFamily:'var(--mono)',color:col}},it.score||'—')
+        h('span',{style:{textAlign:'right',fontWeight:700,fontFamily:'var(--mono)',color:col,whiteSpace:'nowrap'}},it.score||'—')
       );
     })
   );
