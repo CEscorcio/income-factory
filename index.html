@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.38';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.39';</script>
 <meta name="theme-color" content="#0a0a0b">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3488,7 +3488,9 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
       );
     })(),
     /* ── Reembolso Dupla Tributação — explicação por país (segue o ano do dropdown acima) ── */
-    reembolsoByCountry.length>0&&h('div',{className:'card mb-6'},
+    h('div',{className:'tax-split mb-6'},
+      /* Left (8/12): Reembolso Dupla Tributação por país */
+      h('div',{className:'tax-split-main'},reembolsoByCountry.length>0&&h('div',{className:'card',style:{height:'100%'}},
       h(Shdr,{title:'Reembolso Dupla Tributação — por país',
         hint:(year==='ALL'?'Todos os anos':year)+' · dividendo bruto × taxa do tratado = retido no estrangeiro'}),
       h('div',{style:{overflowX:'auto'}},
@@ -3519,16 +3521,9 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
           )
         )
       )
-    ),
-    /* ── Bottom: side-by-side tax cards, each half-width on wider screens ── */
-    h('div',{className:'tax-split mt-6'},
-      /* Left: Imposto Pago por Ano (8 colunas) */
-      h('div',{className:'tax-split-main'},h(TaxPaidByYear,{pos,sold,income,wealth,cfg})),
-      /* Right: Redução por Período de Detenção (4 colunas) */
-      h('div',{className:'tax-split-side'},
-
-      /* Redução por Período de Detenção - CIRS Art. 43º */
-      h('div',{className:'card-sm'},
+    )),
+      /* Right (4/12): Redução por Período de Detenção */
+      h('div',{className:'tax-split-side'},h('div',{className:'card-sm',style:{height:'100%'}},
         h(Shdr,{title:'Redução por Período de Detenção · CIRS Art. 43º'}),
         (()=>{
           const tiers=[
@@ -3584,11 +3579,9 @@ function TaxCalcPage({pos,income,qual,sold,cfg,wealth}){
               '')
           );
         })()
-      ),
-
-      ), /* close tax-split-side */
-
-    ),
+      ))),
+    /* ── Bottom: Imposto Pago por Ano, full width ── */
+    h('div',{className:'mt-6'},h(TaxPaidByYear,{pos,sold,income,wealth,cfg})),
 
 
   );
