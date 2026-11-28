@@ -126,6 +126,7 @@ real(y)   = nominal(y) / (1+inflation)^y
 - **Quote refresh**: three ways to update prices (`cv`):
   - **Cotações online** (Config): Twelve Data for US listings, Alpha Vantage as fallback for London, Xetra, Frankfurt, Amsterdam and Lisbon only (never for US listings, to save its 25 requests/day), and Finnhub (US listings) as the last fallback for anything still missing. Prices are converted to the position currency with ECB rates and reviewed before applying.
   - **Broker CSV** (Config): template download + import.
+  - **Importing an older file never rolls prices back:** for each ticker, if the price already in the app has a newer date (`cvAsOf`) than the file's, the app keeps its own price, date and source (same for `config.refPrices` and the EUR/USD rate). The import message says how many prices were kept.
   - **By hand** in the Transactions page.
 - **Investments outside the portfolio** (`<owner>Investimentos` sections): their current price comes from an active position with the same ticker, otherwise from `cfg.refPrices`. Cotações online also fetches these tickers (marked "(ref.)") and stores the price there.
 - **Live vs not live**: a price is live when it came from an online provider and is at most 4 days old (`cvSource`, `cvAsOf`). Every other price shows an amber ● in Holdings and Transactions; hover it to see the source and date.
