@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.48';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.53';</script>
 <meta name="theme-color" content="#0a0a0b">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -71,6 +71,7 @@ select:focus{outline:1px solid var(--blue);}
 .badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700;letter-spacing:.04em;}
 
 input{background:transparent;border:none;color:inherit;font-family:inherit;font-size:inherit;width:100%;outline:none;}
+input[type=checkbox],input[type=radio]{width:auto;flex:none;}
 a{color:var(--blue);text-decoration:none;}
 
 /* ── KPI accent bars (pseudo-element, can't do in Tailwind) ── */
@@ -331,11 +332,16 @@ a{color:var(--blue);text-decoration:none;}
    and let long labels break inside the button. */
 .page .flex:has(> .btn-primary.flex-1),.page .flex:has(> .btn-secondary.flex-1){flex-wrap:wrap;}
 .page .flex > .btn-primary.flex-1,.page .flex > .btn-secondary.flex-1{flex:1 1 140px;min-width:0;white-space:normal;line-height:1.25;}
-/* Config: Dados column 3/12, Sistema de Pontuação 9/12. */
+/* Config: Dados and Sistema de Pontuação 6/12 each. */
 .conf-split{display:grid;gap:20px;grid-template-columns:minmax(0,1fr);}
-@media(min-width:768px){.conf-split{grid-template-columns:minmax(0,3fr) minmax(0,9fr);}}
+@media(min-width:768px){.conf-split{grid-template-columns:minmax(0,6fr) minmax(0,6fr);}}
 /* Donut cards (Analytics): body fills the card so donut and legend sit centred, not top-left. */
 .donut-card{display:flex;flex-direction:column;}
+/* Dashboard donut: stacked above its legend on phones so it can use the full width. */
+@media(max-width:640px){.donut-half{grid-template-columns:minmax(0,1fr) !important;}}
+.nw-kpis{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr));}
+@media(max-width:639px){.nw-kpis>:last-child{grid-column:1/-1;}}
+@media(min-width:640px){.nw-kpis{grid-template-columns:repeat(3,minmax(0,1fr)) minmax(0,1.5fr);}}
 /* Navigation centred on the page: logo left, tabs centre, save button right. */
 @media(min-width:641px){
   .bar{display:grid;grid-template-columns:1fr auto 1fr;}
@@ -843,6 +849,8 @@ const DCFG={
   targetYield:0.045,
   divGrowth:0.03,
   portfolioGoal:50000,
+  // Owner of the main portfolio (stocks + ETFs) on Net Worth; set in Config.
+  portfolioOwner:'Eu',
   fxEurUsd:1.08,
   despesasItems:[],
   benchmarkCache:{
@@ -2203,9 +2211,11 @@ function PatrimonioPage({wealth,pos,cfg}){
   };
 
   /* ── Owner filter ───────────────────────────────────────────────────────── */
-  const ownerList=['Todos',...Object.keys(owners)];
+  // Owner of the main portfolio (Config → Dono da carteira); interest without an owner goes to them too.
+  const PORT_OWNER=(cfg?.portfolioOwner||'').trim()||'Eu';
+  const ownerList=['Todos',...new Set([...Object.keys(owners),PORT_OWNER])];
   const matchOwner=(o)=>ownerFilter==='Todos'||o===ownerFilter;
-  const jurosFiltered=juros.filter(r=>matchOwner(r.investidor||r.owner||'Carlos'));
+  const jurosFiltered=juros.filter(r=>matchOwner(r.investidor||r.owner||PORT_OWNER));
 
   /* ── Date helpers ────────────────────────────────────────────────────────── */
   const TODAY=new Date();
@@ -2248,7 +2258,7 @@ function PatrimonioPage({wealth,pos,cfg}){
     .map(w=>investmentsSummary(wealth?.[w.key]?.investimentos,pos,cfg))
     .reduce((a,b)=>({value:a.value+b.value,cost:a.cost+b.cost,pl:a.pl+b.pl}),{value:0,cost:0,pl:0});
 
-  /* ── Portfolio (Carlos) — Stocks vs ETFs, in EUR ────────────────────────── */
+  /* ── Portfolio (main owner) — Stocks vs ETFs, in EUR ────────────────────────── */
   const fxUsd=cfg?.fxEurUsd||1.08;
   const portLines=[
     {key:'stocks',label:'Stocks',color:'var(--green)',val:0,cost:0,count:0},
@@ -2260,7 +2270,7 @@ function PatrimonioPage({wealth,pos,cfg}){
     const line=portLines[p.cat==='ETF'?1:0];
     line.val+=c.val/fx;line.cost+=c.cost/fx;line.count++;
   });
-  const showPort=matchOwner('Carlos');
+  const showPort=matchOwner(PORT_OWNER);
   const portTotal=showPort?portLines[0].val+portLines[1].val:0;
   const portCost=showPort?portLines[0].cost+portLines[1].cost:0;
   const portPL=portTotal-portCost;
@@ -2273,7 +2283,8 @@ function PatrimonioPage({wealth,pos,cfg}){
   return h('div',null, // full width like the other pages (.page already adds the side padding)
 
     /* ── Summary KPIs ─────────────────────────────────────────────────────── */
-    h('div',{className:'grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6'},
+    // KPI row: three cards of 8/3 columns each and "Por Investidor" with 4/12.
+    h('div',{className:'nw-kpis mb-6'},
       h('div',{className:'kpi kpi-bl'},
         h('div',{className:'text-[10px] font-bold uppercase tracking-[.06em] text-slate-500 mb-1'},'Total Património'),
         h('div',{style:{fontSize:22,fontWeight:800,color:'var(--text)'}},'€'+fn(grandTotal)),
@@ -2308,10 +2319,11 @@ function PatrimonioPage({wealth,pos,cfg}){
             if(val)vals[w.owner]=(vals[w.owner]||0)+val;
           });
           const portAll=portLines[0].val+portLines[1].val;
-          if(portAll>0)vals['Carlos']=(vals['Carlos']||0)+portAll;
+          if(portAll>0)vals[PORT_OWNER]=(vals[PORT_OWNER]||0)+portAll;
           const entries=Object.entries(vals).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
           const tot=entries.reduce((s,[,v])=>s+v,0);
-          return h('div',{style:{display:'flex',flexDirection:'column',gap:6}},
+          // Two owners per row.
+          return h('div',{style:{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:'8px 18px'}},
             entries.map(([owner,val])=>{
               const s=wOwners[owner]||{color:'#c084fc',bg:'#2a1a2a'};
               const pct=tot>0?val/tot:0;
@@ -2357,11 +2369,11 @@ function PatrimonioPage({wealth,pos,cfg}){
       ];
       const alloc={};
       const add=(o,k,v)=>{if(!o||!v)return;alloc[o]=alloc[o]||{};alloc[o][k]=(alloc[o][k]||0)+v;};
-      portLines.forEach(l=>add('Carlos',l.key,l.val));
+      portLines.forEach(l=>add(PORT_OWNER,l.key,l.val));
       depositos.forEach(r=>add(r.investidor,'dep',r.valor||0));
       ppr.forEach(r=>add(r.owner,'ppr',(r.valorInvestido||0)+(r.ganhosBrutos||0)));
       aforro.forEach(r=>add(r.owner,'aforro',(Number(r.investimento)||0)+(r.juros||0)));
-      juros.forEach(r=>add(r.investidor||r.owner||'Carlos','juros',r.valor||0));
+      juros.forEach(r=>add(r.investidor||r.owner||PORT_OWNER,'juros',r.valor||0));
       wealthInvestments(wealth).forEach(w=>(wealth?.[w.key]?.investimentos||[]).forEach(r=>add(w.owner,'inv',investmentLot(r,pos,cfg).value)));
       const rows=Object.entries(alloc)
         .filter(([o])=>matchOwner(o))
@@ -2601,9 +2613,9 @@ function PatrimonioPage({wealth,pos,cfg}){
       );
     }),
 
-    /* ── Carlos Investimentos ─────────────────────────────────────────── */
+    /* ── Carteira (main portfolio) ─────────────────────────────────────────── */
     showPort&&portTotal>0&&h('div',{className:'mt-5 mb-8'},
-      h(Shdr,{title:'Carlos Investimentos'}),
+      h(Shdr,{title:'Carteira — Acções e ETFs'}),
       h('div',{className:'card-table overflow-x-auto'},
         h('table',null,
           TH('Owner','Tipo','Posições','Investido','Valor Atual','P&L €','P&L %','% Portfolio'),
@@ -2611,7 +2623,7 @@ function PatrimonioPage({wealth,pos,cfg}){
             const pl=l.val-l.cost;
             const plCol=pl>=0?'var(--green)':'var(--red)';
             return h('tr',{key:l.key},
-              h('td',null,ownerBadge('Carlos')),
+              h('td',null,ownerBadge(PORT_OWNER)),
               h('td',{className:'font-semibold'},
                 h('span',{style:{display:'inline-block',width:8,height:8,borderRadius:'50%',background:l.color,marginRight:7}}),l.label),
               h('td',{className:'mono-sm-muted'},l.count),
@@ -4624,10 +4636,11 @@ function App(){
     // ── Sheet 12: Net Worth Summary per Owner ─────────────────────────────
     const nwHeaders=row('Owner','Asset Type','Name','Investido','Valor Actual','Ganho','Retorno%');
     const nwRows=[];
-    const owners=Object.keys(wData.owners||{});
+    const portOwner=(cfg?.portfolioOwner||'').trim()||'Eu';
+    const owners=[...new Set([...Object.keys(wData.owners||{}),portOwner])];
     owners.forEach(owner=>{
-      // Portfolio (Carlos)
-      if(owner==='Carlos'){
+      // Main portfolio (its owner is set in Config)
+      if(owner===portOwner){
         const v=(pos||[]).reduce((s,p)=>s+(p.n||0)*(p.cv||0),0);
         const c=(pos||[]).reduce((s,p)=>s+(p.n||0)*getAv(p),0);
         nwRows.push(row(owner,'Portfolio','Folio',c.toFixed(2),v.toFixed(2),(v-c).toFixed(2),pct((v-c)/c)));
@@ -4828,7 +4841,7 @@ const DonutChart=memo(function DonutChart({pos,cfg,compact=false,half=false}){
   const RO_A=compact?84:(half?109:RO);
   const RI_A=compact?52:(half?69:RI);
 
-  return h('div',{style:half
+  return h('div',{className:half?'donut-half':undefined,style:half
     ?{display:'grid',gridTemplateColumns:'1fr 1fr',gap:24,alignItems:'center'}
     :compact
     ?{display:'flex',gap:32,alignItems:'center',flexWrap:'wrap',flex:1}
@@ -4840,7 +4853,8 @@ const DonutChart=memo(function DonutChart({pos,cfg,compact=false,half=false}){
       style:compact
         ?{flexShrink:0,filter:'drop-shadow(0 4px 24px rgba(0,0,0,.4))',width:SIZE_ACTUAL,height:SIZE_ACTUAL}
         :half
-        ?{filter:'drop-shadow(0 4px 24px rgba(0,0,0,.4))',width:'100%',maxWidth:SIZE_ACTUAL,height:'auto'}
+        // Dashboard donut: drawn at 290 units, shown up to 100px larger (scales with the column).
+        ?{filter:'drop-shadow(0 4px 24px rgba(0,0,0,.4))',width:'100%',maxWidth:SIZE_ACTUAL+100,height:'auto'}
         :{filter:'drop-shadow(0 4px 24px rgba(0,0,0,.4))',width:'100%',maxWidth:SIZE_ACTUAL,height:'auto'},
     },
       // slices
@@ -6034,7 +6048,7 @@ function PricePanel({cfg,setCfg,pos,setPos,wealth}){
   const providerRow=(label,id,onChange,options)=>h('div',{style:{marginBottom:6}},
     h('div',{style:{fontSize:11,color:'var(--muted)',marginBottom:3}},label),
     h('div',{className:'flex gap-1.5'},
-      h('select',{className:'ed',style:{flex:1,fontSize:12},value:id,disabled:running,onChange:e=>onChange(e.target.value)},options),
+      h('select',{className:'ed',style:{flex:1,fontSize:12,textAlign:'left',fontFamily:'inherit',color:'var(--text)'},value:id,disabled:running,onChange:e=>onChange(e.target.value)},options),
       id&&h('input',{className:'ed',type:'password',autoComplete:'off',placeholder:'Chave API '+PRICE_PROVIDERS[id].name,style:{flex:2,fontSize:12},value:keys[id]||'',disabled:running,
         onChange:e=>setKey(id,e.target.value)})
     ),
@@ -6046,7 +6060,7 @@ function PricePanel({cfg,setCfg,pos,setPos,wealth}){
     h('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,lineHeight:1.5}},
       'Pede as cotações das posições activas, converte para a moeda de cada posição com as taxas do BCE e mostra tudo antes de aplicar. As chaves ficam guardadas neste browser.'),
     h('label',{style:{display:'flex',gap:6,alignItems:'flex-start',fontSize:12,color:'var(--muted)',marginBottom:8,lineHeight:1.5,cursor:'pointer'}},
-      h('input',{type:'checkbox',checked:!!cfg?.exportPriceKeys,onChange:e=>{const checked=e.target.checked;setCfg(c=>({...c,exportPriceKeys:checked}));},style:{marginTop:2}}),
+      h('input',{type:'checkbox',checked:!!cfg?.exportPriceKeys,onChange:e=>{const checked=e.target.checked;setCfg(c=>({...c,exportPriceKeys:checked}));},style:{marginTop:2,width:'auto',flex:'none'}}),
       h('span',null,'Incluir as chaves no income-factory.json ao exportar, para as levar para outro dispositivo. ',
         h('span',{style:{color:cfg?.exportPriceKeys?'var(--gold)':'var(--muted)'}},'Quem tiver o ficheiro fica com as chaves: nunca o ponhas no GitHub nem o partilhes.'))),
     providerRow('Fornecedor principal',provider,changeProvider,opts()),
@@ -6061,16 +6075,18 @@ function PricePanel({cfg,setCfg,pos,setPos,wealth}){
     message&&h('div',{style:{fontSize:12,color:'var(--muted)',marginTop:6}},message),
     rows.length>0&&h('div',{style:{overflowX:'auto',marginTop:8}},
       h('table',{style:{width:'100%',borderCollapse:'collapse'}},
-        h('thead',null,h('tr',null,['','Ticker','Símbolo','Fornecedor','Novo','Actual','Δ','Estado'].map(x=>h('th',{key:x,style:{...cell,color:'var(--muted)',textAlign:'left',fontWeight:700}},x)))),
+        h('thead',null,h('tr',null,['','Ticker','Fornecedor','Novo','Actual','Δ','Estado'].map(x=>h('th',{key:x,style:{...cell,color:'var(--muted)',textAlign:'left',fontWeight:700}},x)))),
         h('tbody',null,rows.map((r,i)=>{
           const p=active.find(x=>x.t===r.t);
           return h('tr',{key:r.t},
             h('td',{style:cell},h('input',{type:'checkbox',checked:!!r.apply,disabled:r.status!=='ok'||running,
               onChange:e=>setRows(rows.map((x,j)=>j===i?{...x,apply:e.target.checked}:x))})),
-            h('td',{style:{...cell,fontWeight:700},title:r.ref?'Fora da carteira (secção Investimentos do Património): o preço é guardado em refPrices':''},r.t,r.ref&&h('span',{style:{fontWeight:400,color:'var(--muted)',marginLeft:4}},'(ref.)')),
-            h('td',{style:cell},h('input',{className:'ed',style:{width:84,fontSize:12},defaultValue:r.symbol,disabled:running,key:r.t+r.symbol,
+            // Ticker and the symbol asked to the provider in one cell: the symbol field only
+            // shows when it differs from the ticker or the ticker failed (to fix e.g. LGEN → LGEN.L).
+            h('td',{style:{...cell,fontWeight:700},title:r.ref?'Fora da carteira (secção Investimentos do Património): o preço é guardado em refPrices':''},r.t,r.ref&&h('span',{style:{fontWeight:400,color:'var(--muted)',marginLeft:4}},'(ref.)'),
+              (r.symbol!==r.t||r.status==='error')&&h('div',{style:{marginTop:4}},h('input',{className:'ed',style:{width:96,fontSize:12},defaultValue:r.symbol,disabled:running,key:r.t+r.symbol,
               title:'Formato: TICKER ou TICKER.BOLSA ('+Object.keys(PRICE_EXCHANGES).filter(k=>k!=='US').join(', ')+')',
-              onBlur:e=>{if(p&&e.target.value.trim().toUpperCase()!==r.symbol){changeSymbol(p,e.target.value);setRows(rows.map((x,j)=>j===i?{...x,symbol:e.target.value.trim().toUpperCase()||defaultPriceSymbol(p),status:'pending',apply:false}:x));}}})),
+              onBlur:e=>{if(p&&e.target.value.trim().toUpperCase()!==r.symbol){changeSymbol(p,e.target.value);setRows(rows.map((x,j)=>j===i?{...x,symbol:e.target.value.trim().toUpperCase()||defaultPriceSymbol(p),status:'pending',apply:false}:x));}}}))),
             h('td',{style:cell},r.raw!=null?fmt(r.raw,r.raw<10?4:2)+' '+r.rawCurrency+' · '+short[r.via]:''),
             h('td',{style:{...cell,color:'var(--gold)'}},r.price!=null?fmt(r.price,r.price<10?4:2)+' '+r.target:''),
             h('td',{style:cell},fmt(r.current,r.current<10?4:2)),
@@ -6249,6 +6265,20 @@ function Conf({wealth,cfg,setCfg,pos,setPos,sold,setSold,income,qual,setQual,onR
             }),
             h('span',{className:'text-xs text-[var(--muted)]'},'€')
           )
+        ),
+        h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',
+          padding:'10px 12px',background:'var(--surface)',borderRadius:6,border:'1px solid var(--border)'}},
+          h('div',null,
+            h('div',{style:{fontSize:13,fontWeight:700,color:'var(--text)',whiteSpace:'nowrap'}},'Dono da carteira'),
+            h('div',{style:{fontSize:11,color:'var(--muted)',marginTop:2}},'Nome usado em Net Worth para a carteira principal'),
+          ),
+          h('input',{
+            className:'ed',
+            style:{width:110,textAlign:'right',color:'var(--text)',fontSize:13,fontWeight:700,fontFamily:'inherit'},
+            defaultValue:cfg?.portfolioOwner||'Eu',maxLength:24,
+            onBlur:e=>{const v=e.target.value.trim();if(v)setCfg(c=>({...c,portfolioOwner:v}));else e.target.value=cfg?.portfolioOwner||'Eu';},
+            onKeyDown:e=>e.key==='Enter'&&e.target.blur(),
+          })
         ),
 
         /* Tax Rate */

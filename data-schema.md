@@ -129,6 +129,7 @@ Keys written by the price and exchange-rate updates:
 
 | Key | Notes |
 |---|---|
+| `portfolioOwner` | Name shown on Net Worth for the main portfolio (stocks + ETFs) and for interest without an owner. Set in Config → Dono da carteira. Default `Eu`. |
 | `fxEurUsd`, `fxEurUsdAsOf` | EUR/USD rate and its date. The **BCE** button fills them with the European Central Bank reference rate and also adds that day to `fxHistory.rates`. |
 | `priceProvider` | Last provider used in "Cotações online": `twelvedata`, `alphavantage` or `finnhub`. |
 | `priceFallback` | Provider tried for the tickers the main one can't price (same values, or `""` for none). Default `alphavantage`. |
