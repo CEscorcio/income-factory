@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.13';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.14';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -9024,29 +9024,26 @@ function TesesScorecard({items,total}){
 }
 // ── SWOT (thesis.swot = { strengths, weaknesses, opportunities, threats }: 4 × {title, note}) ──
 const SWOT_Q={
-  strengths:{label:'Forças',bg:'#f4bf5f',icon:'★'},
-  weaknesses:{label:'Fraquezas',bg:'#5fa4a3',icon:'▼'},
-  opportunities:{label:'Oportunidades',bg:'#5aaed8',icon:'↗'},
-  threats:{label:'Ameaças',bg:'#eb6f5a',icon:'⚠'},
+  strengths:{label:'Forças',bg:'#f4bf5f'},
+  weaknesses:{label:'Fraquezas',bg:'#5fa4a3'},
+  opportunities:{label:'Oportunidades',bg:'#5aaed8'},
+  threats:{label:'Ameaças',bg:'#eb6f5a'},
 };
 function TesesSwot({swot}){
   if(!swot||!['strengths','weaknesses','opportunities','threats'].some(k=>(swot[k]||[]).length))return null;
-  const item=(it,icon,i)=>{
+  const item=(it,i)=>{
     const title=typeof it==='string'?it:it?.title;
     const note=typeof it==='string'?null:it?.note;
-    return h('div',{key:i,style:{display:'flex',gap:8,alignItems:'flex-start'}},
-      h('div',{style:{width:26,height:26,flexShrink:0,borderRadius:'50%',border:'1.5px solid rgba(22,24,29,.75)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700}},icon),
-      h('div',null,
-        h('div',{style:{fontSize:12,fontWeight:800,lineHeight:1.25}},title),
-        note&&h('div',{style:{fontSize:11,lineHeight:1.35,marginTop:2,opacity:.85}},note)
-      )
+    return h('div',{key:i},
+      h('div',{style:{fontSize:12,fontWeight:800,lineHeight:1.25}},title),
+      note&&h('div',{style:{fontSize:11,lineHeight:1.35,marginTop:2,opacity:.85}},note)
     );
   };
   const quad=k=>{
     const q=SWOT_Q[k];
     return h('div',{key:k,className:'swot-q',style:{background:q.bg}},
       h('div',{style:{fontSize:20,fontWeight:800,textAlign:'center',letterSpacing:'-.01em'}},q.label),
-      h('div',{className:'swot-items'},(swot[k]||[]).slice(0,4).map((it,i)=>item(it,q.icon,i)))
+      h('div',{className:'swot-items'},(swot[k]||[]).slice(0,4).map((it,i)=>item(it,i)))
     );
   };
   const head=(a,b)=>h('div',{className:'swot-head'},h('div',{style:{fontSize:14,fontWeight:700}},a),h('div',{style:{fontSize:10,opacity:.8}},b));
