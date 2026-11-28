@@ -130,9 +130,9 @@ Keys written by the price and exchange-rate updates:
 | Key | Notes |
 |---|---|
 | `fxEurUsd`, `fxEurUsdAsOf` | EUR/USD rate and its date. The **BCE** button fills them with the European Central Bank reference rate and also adds that day to `fxHistory.rates`. |
-| `priceProvider` | Last provider used in "Cotações online": `twelvedata`, `alphavantage`, `finnhub` or `yahoo`. |
+| `priceProvider` | Last provider used in "Cotações online": `twelvedata`, `alphavantage` or `finnhub`. |
 | `priceFallback` | Provider tried for the tickers the main one can't price (same values, or `""` for none). Default `alphavantage`. |
-| `priceFallback2` | Provider tried last, for the tickers still without a price (same values, or `""` for none). Default `yahoo`. |
+| `priceFallback2` | Provider tried last, for the tickers still without a price (same values, or `""` for none). Default `finnhub`. |
 | `priceSymbols` | `{ "<ticker>": "<symbol>" }` overrides for tickers the provider knows by another symbol, e.g. `{ "LGEN": "LGEN.L" }`. Format `TICKER` (US) or `TICKER.EXCHANGE` with `L`, `AS`, `LS`, `MI`, `DE`, `F`, `BE`, `PA`, `MC`, `CO`. |
 | `quotesImportedAt`, `quotesSource` | When prices were last updated, and from where. |
 | `refPrices` | `{ "<ticker>": { "cv": number, "asOf": date, "source": string } }`: prices for tickers held outside the portfolio (e.g. an ETF in a `wealth.<owner>Investimentos` section), in EUR. Used when no active position has that ticker; updated by Cotações online. |
@@ -280,7 +280,7 @@ Written only when **Incluir as chaves no income-factory.json** is ticked in Conf
 { "priceKeys": { "twelvedata": "…", "alphavantage": "…" } }
 ```
 
-Valid providers: `twelvedata`, `alphavantage`, `finnhub`, `yahoo` (for `yahoo` the value is the URL of your proxy, not a key). Anyone with a file that has this section can use your keys: keep it private and never commit it to the repository (the site is public).
+Valid providers: `twelvedata`, `alphavantage`, `finnhub`. Anyone with a file that has this section can use your keys: keep it private and never commit it to the repository (the site is public).
 
 ---
 
