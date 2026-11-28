@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.26';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.27';</script>
 <meta name="theme-color" content="#0a0a0b">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2258,7 +2258,7 @@ function PatrimonioPage({wealth,pos,cfg}){
   const grandGains=pprGains+allJuros+depInterest+invSum.pl+portPL;
 
 
-  return h('div',{className:'px-4 py-4 max-w-[1400px] mx-auto'},
+  return h('div',null, // full width like the other pages (.page already adds the side padding)
 
     /* ── Summary KPIs ─────────────────────────────────────────────────────── */
     h('div',{className:'grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6'},
