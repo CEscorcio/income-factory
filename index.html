@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.2';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1908,6 +1908,26 @@ const PRICE_PROVIDERS={
       return{price:json.c,date:Number.isFinite(json.t)&&json.t>0?new Date(json.t*1000).toISOString().slice(0,10):'',currency:null};
     },
   },
+  // Yahoo sends no CORS headers, so the browser can't call it directly: requests go
+  // through the user's own proxy (tools/yahoo-proxy/worker.js on Cloudflare Workers).
+  // The "key" of this provider is the proxy URL.
+  yahoo:{
+    name:'Yahoo Finance',site:null,delayMs:600,dailyLimit:null,keyIsUrl:true,
+    keyPlaceholder:'URL do teu proxy (https://…workers.dev)',
+    note:'Sem chave e sem limite diário conhecido; cobre EUA e todas as bolsas europeias da app (Londres, Xetra, Amesterdão, Lisboa, Paris, Milão, Madrid…). Não é uma API oficial e precisa do teu proxy (Cloudflare Worker grátis): instruções em tools/yahoo-proxy no repositório.',
+    url:(s,proxy)=>{
+      if(!/^https:\/\/[^\s/]+/.test(proxy||''))throw new Error('URL do proxy inválido: deve começar por https://');
+      const symbol=s.code==='US'?s.base:s.base+'.'+s.code;
+      return`${proxy.replace(/\/+$/,'')}/v8/finance/chart/${enc(symbol)}?range=5d&interval=1d`;
+    },
+    parse:json=>{
+      const chart=json.chart||{};
+      if(chart.error)throw new Error(/not found|no data/i.test(chart.error.description||chart.error.code||'')?'Símbolo não encontrado.':String(chart.error.description||chart.error.code).slice(0,80));
+      const meta=chart.result&&chart.result[0]&&chart.result[0].meta;
+      if(!meta||!Number.isFinite(meta.regularMarketPrice))throw new Error('Símbolo não encontrado.');
+      return{price:meta.regularMarketPrice,date:Number.isFinite(meta.regularMarketTime)?new Date(meta.regularMarketTime*1000).toISOString().slice(0,10):'',currency:meta.currency||null};
+    },
+  },
 };
 function providerCovers(providerId,symbol){
   const list=PRICE_PROVIDERS[providerId].exchanges;
@@ -2024,8 +2044,9 @@ async function fetchQuote(providerId,symbol,key){
 async function fetchQuoteRaw(providerId,symbol,key){
   const provider=PRICE_PROVIDERS[providerId];
   const s=parsePriceSymbol(symbol);
+  const url=provider.url(s,key);
   let res;
-  try{res=await fetch(provider.url(s,key));}
+  try{res=await fetch(url);}
   catch(e){throw new Error('Pedido bloqueado pelo browser ou sem rede.');}
   let json=null;
   try{json=await res.json();}catch(e){if(res.ok)throw new Error('Resposta inválida do fornecedor.');}
@@ -6017,6 +6038,7 @@ function BrokerSelect({value,list,onChange,style}){
 function PricePanel({cfg,setCfg,pos,setPos,wealth}){
   const[provider,setProvider]=useState(cfg?.priceProvider&&PRICE_PROVIDERS[cfg.priceProvider]?cfg.priceProvider:'twelvedata');
   const[fallback,setFallback]=useState(cfg?.priceFallback===''?'':(cfg?.priceFallback&&PRICE_PROVIDERS[cfg.priceFallback]?cfg.priceFallback:'alphavantage'));
+  const[fallback2,setFallback2]=useState(cfg?.priceFallback2===''?'':(cfg?.priceFallback2&&PRICE_PROVIDERS[cfg.priceFallback2]?cfg.priceFallback2:'yahoo'));
   const[keys,setKeys]=useState(()=>Object.fromEntries(Object.keys(PRICE_PROVIDERS).map(id=>[id,readPriceKey(id)])));
   const[rows,setRows]=useState([]);
   const[running,setRunning]=useState(false);
@@ -6032,6 +6054,8 @@ function PricePanel({cfg,setCfg,pos,setPos,wealth}){
     return()=>window.removeEventListener('price-keys-changed',refresh);
   },[]);
   const fb=fallback&&fallback!==provider?fallback:'';
+  const fb2=fallback2&&fallback2!==provider&&fallback2!==fb?fallback2:'';
+  const fallbacks=[fb,fb2].filter(Boolean);
   // Active positions plus reference tickers (e.g. an ETF held in a wealth <owner>Investimentos section),
   // whose price is stored in cfg.refPrices instead of a position. They are in EUR.
   const active=[...(pos||[]).filter(p=>(p.n==null||p.n>0)&&p.t),
@@ -6040,6 +6064,7 @@ function PricePanel({cfg,setCfg,pos,setPos,wealth}){
   const setKey=(id,value)=>{const v=value.trim();setKeys(k=>({...k,[id]:v}));writePriceKey(id,v);};
   const changeProvider=id=>{setProvider(id);setRows([]);setMessage('');setCfg(c=>({...c,priceProvider:id}));};
   const changeFallback=id=>{setFallback(id);setRows([]);setMessage('');setCfg(c=>({...c,priceFallback:id}));};
+  const changeFallback2=id=>{setFallback2(id);setRows([]);setMessage('');setCfg(c=>({...c,priceFallback2:id}));};
   const changeSymbol=(p,value)=>{
     const symbol=value.trim().toUpperCase();
     setCfg(c=>{
@@ -6065,7 +6090,7 @@ function PricePanel({cfg,setCfg,pos,setPos,wealth}){
     };
     // Pass 1: main provider for every ticker. Pass 2: fallback for the ones that failed and it covers.
     const passes=[{id:provider,pick:()=>next.map((_,i)=>i)}];
-    if(fb&&keys[fb])passes.push({id:fb,pick:()=>next.map((r,i)=>i).filter(i=>next[i].status==='error'&&providerCovers(fb,next[i].symbol))});
+    fallbacks.filter(id=>keys[id]).forEach(id=>passes.push({id,pick:()=>next.map((r,i)=>i).filter(i=>next[i].status==='error'&&providerCovers(id,next[i].symbol))}));
     for(const pass of passes){
       const info=PRICE_PROVIDERS[pass.id];
       const idx=pass.pick();
@@ -6091,12 +6116,12 @@ function PricePanel({cfg,setCfg,pos,setPos,wealth}){
         setRows([...next]);
       }
     }
-    if(fb&&keys[fb]&&!cancel.current){
-      next.forEach((r,i)=>{if(r.status==='error'&&!providerCovers(fb,r.symbol))next[i]={...r,error:r.error+' '+PRICE_PROVIDERS[fb].name+' não cobre esta bolsa.'};});
+    if(!cancel.current)fallbacks.filter(id=>keys[id]).forEach(id=>{
+      next.forEach((r,i)=>{if(r.status==='error'&&!providerCovers(id,r.symbol))next[i]={...r,error:r.error+' '+PRICE_PROVIDERS[id].name+' não cobre esta bolsa.'};});
       setRows([...next]);
-    }
+    });
     const ok=next.filter(r=>r.status==='ok').length;
-    const note=fb&&!keys[fb]?' Sem chave para '+PRICE_PROVIDERS[fb].name+': fallback não usado.':'';
+    const note=fallbacks.filter(id=>!keys[id]).map(id=>' Sem '+(PRICE_PROVIDERS[id].keyIsUrl?'proxy':'chave')+' para '+PRICE_PROVIDERS[id].name+': não usado.').join('');
     setMessage(cancel.current?'Cancelado.':`${ok} de ${next.length} tickers com cotação. Revê e aplica.`+note);
     setRunning(false);
   };
@@ -6112,22 +6137,22 @@ function PricePanel({cfg,setCfg,pos,setPos,wealth}){
     setCfg(c=>{
       const refPrices={...(c?.refPrices||{})};
       toApply.filter(r=>r.ref).forEach(r=>{refPrices[r.t]={cv:Math.round(r.price*10000)/10000,asOf:r.date||today,source:PRICE_PROVIDERS[r.via].name};});
-      return{...c,refPrices,priceProvider:provider,priceFallback:fallback,quotesImportedAt:new Date().toISOString(),quotesSource:sources};
+      return{...c,refPrices,priceProvider:provider,priceFallback:fallback,priceFallback2:fallback2,quotesImportedAt:new Date().toISOString(),quotesSource:sources};
     });
     setMessage(`${toApply.length} cotações aplicadas.`);
     setRows(rows.map(r=>r.status==='ok'&&r.apply?{...r,status:'applied',apply:false}:r));
   };
   const fmt=(v,d=2)=>Number.isFinite(v)?v.toFixed(d):'—';
   const cell={padding:'4px 6px',fontSize:10,borderBottom:'1px solid var(--border)',whiteSpace:'nowrap'};
-  const short={twelvedata:'TD',alphavantage:'AV',finnhub:'FH'};
+  const short={twelvedata:'TD',alphavantage:'AV',finnhub:'FH',yahoo:'YF'};
   const providerRow=(label,id,onChange,options)=>h('div',{style:{marginBottom:6}},
     h('div',{style:{fontSize:9,color:'var(--muted)',marginBottom:3}},label),
     h('div',{className:'flex gap-1.5'},
       h('select',{className:'ed',style:{flex:1,fontSize:11},value:id,disabled:running,onChange:e=>onChange(e.target.value)},options),
-      id&&h('input',{className:'ed',type:'password',autoComplete:'off',placeholder:'Chave API '+PRICE_PROVIDERS[id].name,style:{flex:2,fontSize:11},value:keys[id]||'',disabled:running,
+      id&&h('input',{className:'ed',type:PRICE_PROVIDERS[id].keyIsUrl?'url':'password',autoComplete:'off',placeholder:PRICE_PROVIDERS[id].keyPlaceholder||'Chave API '+PRICE_PROVIDERS[id].name,style:{flex:2,fontSize:11},value:keys[id]||'',disabled:running,
         onChange:e=>setKey(id,e.target.value)})
     ),
-    id&&h('div',{style:{fontSize:9,color:'var(--muted)',marginTop:3,lineHeight:1.5}},PRICE_PROVIDERS[id].note+' Chave gratuita em '+PRICE_PROVIDERS[id].site+'.')
+    id&&h('div',{style:{fontSize:9,color:'var(--muted)',marginTop:3,lineHeight:1.5}},PRICE_PROVIDERS[id].note+(PRICE_PROVIDERS[id].site?' Chave gratuita em '+PRICE_PROVIDERS[id].site+'.':''))
   );
   const opts=exclude=>Object.entries(PRICE_PROVIDERS).filter(([id])=>id!==exclude).map(([id,p])=>h('option',{key:id,value:id},p.name));
   return h('div',{className:'input-row'},
@@ -6140,6 +6165,7 @@ function PricePanel({cfg,setCfg,pos,setPos,wealth}){
         h('span',{style:{color:cfg?.exportPriceKeys?'var(--gold)':'var(--muted)'}},'Quem tiver o ficheiro fica com as chaves: nunca o ponhas no GitHub nem o partilhes.'))),
     providerRow('Fornecedor principal',provider,changeProvider,opts()),
     providerRow('Se falhar, tentar',fb,changeFallback,[h('option',{key:'',value:''},'Nenhum'),...opts(provider)]),
+    providerRow('Por último, tentar',fb2,changeFallback2,[h('option',{key:'',value:''},'Nenhum'),...Object.entries(PRICE_PROVIDERS).filter(([id])=>id!==provider&&id!==fb).map(([id,p])=>h('option',{key:id,value:id},p.name))]),
     h('div',{className:'flex gap-1.5',style:{marginTop:4}},
       running
         ?h('button',{className:'btn-secondary ml-0 flex-1',onClick:()=>{cancel.current=true;}},'Cancelar')

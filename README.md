@@ -36,6 +36,7 @@ How each number is calculated: [`app-guide.md`](app-guide.md).
 | ECB reference rates (via Frankfurter) | EUR/USD and other currencies | none |
 | Twelve Data (free plan) | US exchanges | free, 800 requests/day |
 | Alpha Vantage (free plan), used as fallback | US, London, Xetra, Frankfurt, Amsterdam, Lisbon | free, 25 requests/day |
+| Yahoo Finance via your own Cloudflare Worker ([`tools/yahoo-proxy`](tools/yahoo-proxy/README.md)), last fallback | US and every European exchange in the app | no key; unofficial API |
 | Broker CSV | anything | — |
 
 Config → **Cotações online** tests every active ticker, converts to the position's currency and shows the result before applying. Prices that are not live (typed by hand, from CSV, or older than 4 days) are marked with an amber ●.
