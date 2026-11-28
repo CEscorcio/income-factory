@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.3';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.4';</script>
 <meta name="theme-color" content="#0d1117">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -9186,6 +9186,22 @@ function parseScore(text){
 function scoreTone(r){
   return r>=0.8?'var(--green)':r>=0.6?'var(--blue)':r>=0.4?'var(--tier-ok)':r>=0.2?'var(--tier-warn)':'var(--red)';
 }
+// Financial Quality rows, laid out like the Scorecard: muted metric names, mono values,
+// thin row dividers; the latest year is in bold.
+function TesesFinancials({years,rows}){
+  if(!rows||!rows.length)return null;
+  const n=Math.max(...rows.map(r=>(r.values||[]).length),(years||[]).length,1);
+  const cols=Array.from({length:n},(_,i)=>(years||[])[i]||'—');
+  const grid={display:'grid',gridTemplateColumns:'minmax(0,1fr) '+cols.map(()=>'minmax(64px,auto)').join(' '),gap:12,alignItems:'center'};
+  const small={fontSize:10,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--muted)'};
+  return h('div',{style:{marginTop:8}},
+    h('div',{style:{...grid,paddingBottom:6,borderBottom:'1px dashed var(--border)'}},
+      h('span',{style:small},'Métrica'),
+      cols.map((y,i)=>h('span',{key:i,style:{...small,fontFamily:'var(--mono)',textAlign:'right'}},y))),
+    rows.map((r,i)=>h('div',{key:i,style:{...grid,padding:'4px 0',borderBottom:'1px solid var(--s2)',fontSize:12}},
+      h('span',{style:{color:'var(--muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'},title:r.metric},r.metric),
+      cols.map((_,j)=>h('span',{key:j,style:{textAlign:'right',fontFamily:'var(--mono)',fontWeight:j===n-1?700:400,color:j===n-1?'var(--text)':'var(--muted)',whiteSpace:'nowrap'}},(r.values||[])[j]??'—')))));
+}
 function TesesScorecard({items,total}){
   if(!items||!items.length)return null;
   const tot=parseScore(total);
@@ -9404,8 +9420,7 @@ function TesesPage({pos,teses,qual}){
           ),
           (t.financials||[]).length>0&&h('div',{className:'card',style:{flex:1}},
             h(Shdr,{title:'Financial Quality'}),
-            TesesTable(['Métrica',...(t.financialsYears||['—','—','—'])],
-              (t.financials||[]).map(r=>[r.metric,...r.values]))
+            h(TesesFinancials,{years:t.financialsYears,rows:t.financials})
           )
         ),
         (!isEtfT||(t.scorecard||[]).length>0)&&h('div',{className:'card',style:{height:'100%'}},
