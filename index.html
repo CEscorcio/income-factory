@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.50';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.51';</script>
 <meta name="theme-color" content="#0a0a0b">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -71,6 +71,7 @@ select:focus{outline:1px solid var(--blue);}
 .badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700;letter-spacing:.04em;}
 
 input{background:transparent;border:none;color:inherit;font-family:inherit;font-size:inherit;width:100%;outline:none;}
+input[type=checkbox],input[type=radio]{width:auto;flex:none;}
 a{color:var(--blue);text-decoration:none;}
 
 /* ── KPI accent bars (pseudo-element, can't do in Tailwind) ── */
@@ -331,9 +332,9 @@ a{color:var(--blue);text-decoration:none;}
    and let long labels break inside the button. */
 .page .flex:has(> .btn-primary.flex-1),.page .flex:has(> .btn-secondary.flex-1){flex-wrap:wrap;}
 .page .flex > .btn-primary.flex-1,.page .flex > .btn-secondary.flex-1{flex:1 1 140px;min-width:0;white-space:normal;line-height:1.25;}
-/* Config: Dados column 3/12, Sistema de Pontuação 9/12. */
+/* Config: Dados and Sistema de Pontuação 6/12 each. */
 .conf-split{display:grid;gap:20px;grid-template-columns:minmax(0,1fr);}
-@media(min-width:768px){.conf-split{grid-template-columns:minmax(0,3fr) minmax(0,9fr);}}
+@media(min-width:768px){.conf-split{grid-template-columns:minmax(0,6fr) minmax(0,6fr);}}
 /* Donut cards (Analytics): body fills the card so donut and legend sit centred, not top-left. */
 .donut-card{display:flex;flex-direction:column;}
 /* Navigation centred on the page: logo left, tabs centre, save button right. */
@@ -6039,7 +6040,7 @@ function PricePanel({cfg,setCfg,pos,setPos,wealth}){
   const providerRow=(label,id,onChange,options)=>h('div',{style:{marginBottom:6}},
     h('div',{style:{fontSize:11,color:'var(--muted)',marginBottom:3}},label),
     h('div',{className:'flex gap-1.5'},
-      h('select',{className:'ed',style:{flex:1,fontSize:12},value:id,disabled:running,onChange:e=>onChange(e.target.value)},options),
+      h('select',{className:'ed',style:{flex:1,fontSize:12,textAlign:'left',fontFamily:'inherit',color:'var(--text)'},value:id,disabled:running,onChange:e=>onChange(e.target.value)},options),
       id&&h('input',{className:'ed',type:'password',autoComplete:'off',placeholder:'Chave API '+PRICE_PROVIDERS[id].name,style:{flex:2,fontSize:12},value:keys[id]||'',disabled:running,
         onChange:e=>setKey(id,e.target.value)})
     ),
@@ -6051,7 +6052,7 @@ function PricePanel({cfg,setCfg,pos,setPos,wealth}){
     h('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,lineHeight:1.5}},
       'Pede as cotações das posições activas, converte para a moeda de cada posição com as taxas do BCE e mostra tudo antes de aplicar. As chaves ficam guardadas neste browser.'),
     h('label',{style:{display:'flex',gap:6,alignItems:'flex-start',fontSize:12,color:'var(--muted)',marginBottom:8,lineHeight:1.5,cursor:'pointer'}},
-      h('input',{type:'checkbox',checked:!!cfg?.exportPriceKeys,onChange:e=>{const checked=e.target.checked;setCfg(c=>({...c,exportPriceKeys:checked}));},style:{marginTop:2}}),
+      h('input',{type:'checkbox',checked:!!cfg?.exportPriceKeys,onChange:e=>{const checked=e.target.checked;setCfg(c=>({...c,exportPriceKeys:checked}));},style:{marginTop:2,width:'auto',flex:'none'}}),
       h('span',null,'Incluir as chaves no income-factory.json ao exportar, para as levar para outro dispositivo. ',
         h('span',{style:{color:cfg?.exportPriceKeys?'var(--gold)':'var(--muted)'}},'Quem tiver o ficheiro fica com as chaves: nunca o ponhas no GitHub nem o partilhes.'))),
     providerRow('Fornecedor principal',provider,changeProvider,opts()),
