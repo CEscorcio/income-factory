@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.23';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.24';</script>
 <meta name="theme-color" content="#0a0a0b">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -7815,25 +7815,23 @@ function AnalyticsPage({pos,qual,income,sold,cfg,wealth}){
         const stocks=pos.filter(p=>p.cat!=='ETF').map(p=>({t:p.t,name:p.name||p.t,country:p.country||'',val:p.n*(p.cv||0)})).filter(x=>x.val>0).sort((a,b)=>b.val-a.val);
         if(!stocks.length)return null;
         const COLS=CHART_PALETTE;
-        const CX=110,CY=110,R=96,ri=58;
+        const CX=110,CY=110,R=84,ri=52; // same ring as the compact DonutChart (Alocação por Posição)
         const slices=computeDonutSlices(stocks.map((x,i)=>({...x,col:COLS[i%COLS.length]})),CX,CY,R,ri);
         const hovSlice=slices.find(s=>s.t===hov);
-        const col1=slices.slice(0,Math.ceil(slices.length/3));
-        const col2=slices.slice(Math.ceil(slices.length/3),Math.ceil(slices.length*2/3));
-        const col3=slices.slice(Math.ceil(slices.length*2/3));
+        // Legend item styled like the compact DonutChart legend (Alocação por Posição).
         const LegRow=({sl})=>h('div',{
-          style:{display:'flex',alignItems:'center',gap:4,padding:'3px 0',cursor:'pointer',opacity:hov&&hov!==sl.t?.25:1,transition:'opacity .15s'},
+          style:{display:'flex',alignItems:'center',gap:6,cursor:'pointer',opacity:hov&&hov!==sl.t?.4:1,transition:'opacity .15s'},
           onMouseEnter:()=>setHov(sl.t),onMouseLeave:()=>setHov(null)},
-          h('div',{style:{width:8,height:8,borderRadius:'50%',background:sl.col,flexShrink:0}}),
-          h('span',{style:{fontSize:14,color:'var(--muted)',whiteSpace:'nowrap'}},sl.t),
-          h('span',{style:{fontSize:14,color:sl.col,fontWeight:700,whiteSpace:'nowrap'}},' '+(sl.pct*100).toFixed(1)+'%')
+          h('div',{style:{width:10,height:10,borderRadius:6,background:sl.col,flexShrink:0}}),
+          h('span',{style:{fontSize:14,color:'var(--muted)',whiteSpace:'nowrap'}},
+            sl.t,' ',h('span',{style:{color:sl.col,fontWeight:700}},(sl.pct*100).toFixed(1)+'%'))
         );
         return h('div',{className:'card',style:{gridColumn:'span 8'}},
           h(Shdr,{title:'Exposição por Stock',hint:stocks.length+' posições'}),
-          h('div',{style:{display:'flex',gap:24,alignItems:'center',marginTop:12,flexWrap:'wrap'}},
+          h('div',{style:{display:'flex',gap:24,alignItems:'flex-start',flexWrap:'wrap'}},
             /* Pie */
             h('div',{style:{flexShrink:0}},
-              h('svg',{width:220,height:220},
+              h('svg',{width:220,height:220,style:{filter:'drop-shadow(0 4px 24px rgba(0,0,0,.4))'}},
                 slices.map(sl=>h('path',{key:sl.t,d:sl.d,fill:sl.col,
                   opacity:hov&&hov!==sl.t?.2:1,
                   style:{cursor:'pointer',transition:'opacity .15s'},
@@ -7843,11 +7841,9 @@ function AnalyticsPage({pos,qual,income,sold,cfg,wealth}){
                   hovSlice?(hovSlice.pct*100).toFixed(1)+'%':(stocks.length+' posições'))
               )
             ),
-            /* 3 columns legend */
-            h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(110px,1fr))',gap:'0 20px',flex:'1 1 220px',minWidth:0,alignItems:'start'}},
-              [col1,col2,col3].map((col,ci)=>
-                h('div',{key:ci},col.map(sl=>h(LegRow,{key:sl.t,sl})))
-              )
+            /* legend: same grid as Alocação por Posição (row by row) */
+            h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(110px,1fr))',gap:'4px 16px',flex:'1 1 220px',minWidth:0,alignContent:'start'}},
+              slices.map(sl=>h(LegRow,{key:sl.t,sl}))
             )
           )
         );
