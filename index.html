@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.47';</script>
+<script>/* Atualizar a cada release (AAAA-MM-DD ou AAAA-MM-DD.N para várias no mesmo dia), junto com CACHE em sw.js */window.APP_RELEASE='2026-11-28.48';</script>
 <meta name="theme-color" content="#0a0a0b">
 <meta name="description" content="Income Factory: painel de carteira e renda">
 <link rel="manifest" href="manifest.webmanifest">
@@ -9144,9 +9144,9 @@ function TesesDividends({data}){
   const cur=!data.currency||data.currency==='USD'?'$':data.currency==='EUR'?'€':data.currency+' ';
   const per=data.periodLabel||'FY';   // 'FY' (exercício) por defeito; ex.: 'Ano de pagamento'
   const M={
-    dps:{label:'Dividendo por acção',short:'DPS',col:'var(--green)',fmt:v=>cur+(Math.abs(v*100-Math.round(v*100))>1e-6?v.toFixed(3):v.toFixed(2))},
-    yield:{label:'Dividend yield',short:'Yield',col:'var(--blue)',fmt:v=>(v*100).toFixed(2)+'%'},
-    payout:{label:'Payout ratio',short:'Payout',col:'var(--gold)',fmt:v=>(v*100).toFixed(2)+'%'}
+    dps:{label:'Dividendo por acção',short:'DPS',col:'#10b981',fmt:v=>cur+(Math.abs(v*100-Math.round(v*100))>1e-6?v.toFixed(3):v.toFixed(2))},
+    yield:{label:'Dividend yield',short:'Yield',col:'#60a5fa',fmt:v=>(v*100).toFixed(2)+'%'},
+    payout:{label:'Payout ratio',short:'Payout',col:'#f59e0b',fmt:v=>(v*100).toFixed(2)+'%'}
   };
   const KEYS=['dps','yield','payout'];
   const shown=KEYS.filter(k=>!hidden[k]&&hist.some(r=>Number.isFinite(r[k])));
